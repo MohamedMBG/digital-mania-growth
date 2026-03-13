@@ -1,139 +1,262 @@
-import { useParams, Link } from "react-router-dom";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { motion } from "framer-motion";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import { services } from "@/data/services";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-import { services } from "@/data/services";
-import { Clock, Shield, RefreshCcw, Check, ArrowLeft } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Clock3,
+  RefreshCcw,
+  Shield,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
 
 const ServiceDetails = () => {
   const { id } = useParams();
   const { toast } = useToast();
-  const service = services.find((s) => s.id === id);
+  const service = services.find((item) => item.id === id);
   const [link, setLink] = useState("");
   const [quantity, setQuantity] = useState(1000);
 
+  const clampedQuantity = useMemo(() => {
+    if (!service) return 0;
+    return Math.min(Math.max(quantity, service.minOrder), service.maxOrder);
+  }, [quantity, service]);
+
   if (!service) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-white text-[#111827]">
         <Header />
-        <div className="container py-20 text-center">
-          <p className="text-lg text-muted-foreground">Service not found.</p>
-          <Link to="/services">
-            <Button className="mt-4" variant="outline">Back to Services</Button>
-          </Link>
-        </div>
+        <section className="py-24">
+          <div className="container text-center">
+            <p className="text-2xl font-semibold">Service not found</p>
+            <p className="mt-3 text-slate-500">The service you were trying to access no longer exists.</p>
+            <Link to="/services">
+              <Button className="mt-6 rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8]">
+                Back to Services
+              </Button>
+            </Link>
+          </div>
+        </section>
         <Footer />
       </div>
     );
   }
 
-  const totalPrice = ((quantity / 1000) * service.pricePerK).toFixed(2);
-  const clampedQty = Math.min(Math.max(quantity, service.minOrder), service.maxOrder);
+  const totalPrice = ((clampedQuantity / 1000) * service.pricePerK).toFixed(2);
+  const relatedServices = services.filter((item) => item.platform === service.platform && item.id !== service.id).slice(0, 3);
 
   const handleOrder = () => {
     if (!link.trim()) {
-      toast({ title: "Link required", description: "Please enter your social media link.", variant: "destructive" });
+      toast({
+        title: "Link required",
+        description: "Add the destination URL before continuing to checkout.",
+        variant: "destructive",
+      });
       return;
     }
-    toast({ title: "Order placed!", description: `${clampedQty.toLocaleString()} ${service.name} for $${totalPrice}` });
+
+    toast({
+      title: "Draft order ready",
+      description: `${clampedQuantity.toLocaleString()} ${service.name} prepared for checkout.`,
+    });
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-white text-[#111827]">
       <Header />
 
-      <section className="py-16">
-        <div className="container max-w-4xl">
-          <Link to="/services" className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+      <section className="py-14 md:py-16">
+        <div className="container">
+          <Link
+            to="/services"
+            className="inline-flex items-center gap-2 text-sm text-slate-500 transition-colors hover:text-[#111827]"
+          >
             <ArrowLeft className="h-4 w-4" />
-            Back to Services
+            Back to services
           </Link>
 
-          <div className="grid gap-10 lg:grid-cols-5">
-            {/* Info */}
-            <div className="lg:col-span-3">
-              <span className="mb-3 inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+          <div className="mt-8 grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+            <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+              <Badge variant="outline" className="rounded-full border-[#2563EB]/15 bg-[#2563EB]/5 px-3 py-1 text-[#2563EB]">
                 {service.platform}
-              </span>
-              <h1 className="mb-4 text-3xl font-bold text-foreground">{service.name}</h1>
-              <p className="mb-8 text-muted-foreground leading-relaxed">{service.description}</p>
+              </Badge>
+              <h1 className="mt-5 text-4xl font-semibold tracking-[-0.04em] text-[#111827] md:text-5xl">
+                {service.name}
+              </h1>
+              <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">{service.description}</p>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="mt-8 grid gap-4 sm:grid-cols-2">
                 {[
-                  { icon: Clock, label: "Delivery", value: service.deliverySpeed },
+                  { icon: Clock3, label: "Delivery speed", value: service.deliverySpeed },
                   { icon: Shield, label: "Guarantee", value: service.guarantee },
-                  { icon: RefreshCcw, label: "Refill", value: service.refillPolicy },
-                  { icon: Check, label: "Quality", value: "Premium" },
+                  { icon: RefreshCcw, label: "Refill policy", value: service.refillPolicy },
+                  { icon: Sparkles, label: "Quality", value: "Premium engagement flow" },
                 ].map((item) => (
-                  <Card key={item.label} className="border-0 bg-card shadow-sm">
-                    <CardContent className="flex items-center gap-3 p-4">
-                      <item.icon className="h-5 w-5 text-primary" />
+                  <Card key={item.label} className="rounded-[1.5rem] border border-slate-200 bg-[#F8FAFC] shadow-none">
+                    <CardContent className="flex items-start gap-4 p-5">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-sm">
+                        <item.icon className="h-5 w-5 text-[#2563EB]" />
+                      </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">{item.label}</p>
-                        <p className="text-sm font-medium text-foreground">{item.value}</p>
+                        <p className="text-sm text-slate-400">{item.label}</p>
+                        <p className="mt-1 font-semibold text-[#111827]">{item.value}</p>
                       </div>
                     </CardContent>
                   </Card>
                 ))}
               </div>
-            </div>
 
-            {/* Order form */}
-            <div className="lg:col-span-2">
-              <Card className="border-0 bg-card shadow-lg sticky top-24">
-                <CardContent className="p-6">
-                  <h3 className="mb-6 text-lg font-semibold text-foreground">Place Order</h3>
+              <div className="mt-10 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_55px_rgba(15,23,42,0.05)]">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm uppercase tracking-[0.2em] text-slate-400">Why this converts</p>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#111827]">
+                      Social proof that looks polished from the start
+                    </h2>
+                  </div>
+                  <div className="hidden rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600 md:inline-flex">
+                    Active demand
+                  </div>
+                </div>
+                <div className="mt-6 grid gap-3 md:grid-cols-3">
+                  {[
+                    "Fast ordering workflow",
+                    "Safe frontend checkout flow",
+                    "Designed to support launch momentum",
+                  ].map((item) => (
+                    <div key={item} className="rounded-[1.25rem] bg-[#F8FAFC] px-4 py-4 text-sm font-medium text-slate-600">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-                  <div className="space-y-4">
+              {relatedServices.length > 0 && (
+                <div className="mt-10">
+                  <p className="text-sm uppercase tracking-[0.2em] text-slate-400">Related services</p>
+                  <div className="mt-4 grid gap-4 md:grid-cols-3">
+                    {relatedServices.map((item) => (
+                      <Card key={item.id} className="rounded-[1.5rem] border border-slate-200 bg-white shadow-[0_14px_35px_rgba(15,23,42,0.04)]">
+                        <CardContent className="p-5">
+                          <p className="text-sm font-semibold text-[#111827]">{item.name}</p>
+                          <p className="mt-2 text-sm text-slate-500">${item.pricePerK} per 1K</p>
+                          <Link to={`/services/${item.id}`}>
+                            <Button variant="outline" className="mt-4 w-full rounded-xl border-slate-200 bg-white text-[#111827]">
+                              View
+                            </Button>
+                          </Link>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.05 }}
+            >
+              <Card className="sticky top-24 rounded-[2rem] border border-slate-200 bg-white shadow-[0_25px_70px_rgba(15,23,42,0.06)]">
+                <CardContent className="p-7">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <Label className="mb-2 block text-sm">Your Link</Label>
+                      <p className="text-sm uppercase tracking-[0.2em] text-slate-400">Quick checkout</p>
+                      <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#111827]">
+                        Configure your order
+                      </h3>
+                    </div>
+                    <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
+                      Step 1 of 2
+                    </div>
+                  </div>
+
+                  <div className="mt-6 space-y-5">
+                    <div>
+                      <Label className="mb-2 block text-sm font-medium text-slate-600">Destination link</Label>
                       <Input
-                        placeholder="https://instagram.com/yourprofile"
                         value={link}
                         onChange={(e) => setLink(e.target.value)}
+                        placeholder="https://instagram.com/yourprofile"
+                        className="h-12 rounded-xl border-slate-200 bg-[#F8FAFC]"
                       />
                     </div>
 
                     <div>
-                      <Label className="mb-2 block text-sm">Quantity</Label>
+                      <Label className="mb-2 block text-sm font-medium text-slate-600">Quantity</Label>
                       <Input
                         type="number"
+                        value={quantity}
                         min={service.minOrder}
                         max={service.maxOrder}
-                        value={quantity}
                         onChange={(e) => setQuantity(Number(e.target.value))}
+                        className="h-12 rounded-xl border-slate-200 bg-[#F8FAFC]"
                       />
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Min: {service.minOrder.toLocaleString()} — Max: {service.maxOrder.toLocaleString()}
+                      <p className="mt-2 text-xs text-slate-500">
+                        Min {service.minOrder.toLocaleString()} • Max {service.maxOrder.toLocaleString()}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-background p-4">
+                    <div className="rounded-[1.5rem] border border-slate-200 bg-[#F8FAFC] p-5">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Total</span>
-                        <span className="text-2xl font-bold text-foreground">${totalPrice}</span>
+                        <span className="text-sm text-slate-500">Order total</span>
+                        <span className="text-3xl font-semibold tracking-[-0.04em] text-[#111827]">${totalPrice}</span>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground text-right">
-                        ${service.pricePerK} per 1,000
-                      </p>
+                      <div className="mt-3 flex items-center justify-between text-sm text-slate-500">
+                        <span>{clampedQuantity.toLocaleString()} units</span>
+                        <span>${service.pricePerK} / 1K</span>
+                      </div>
+                      <div className="mt-4 h-2 rounded-full bg-white">
+                        <div
+                          className="h-2 rounded-full bg-[linear-gradient(135deg,#2563EB,#7C3AED)]"
+                          style={{
+                            width: `${Math.max(
+                              12,
+                              (clampedQuantity / service.maxOrder) * 100
+                            )}%`,
+                          }}
+                        />
+                      </div>
                     </div>
 
-                    <Button
-                      className="w-full gradient-primary border-0 text-primary-foreground hover:opacity-90"
-                      size="lg"
-                      onClick={handleOrder}
-                    >
-                      Order Now
-                    </Button>
+                    <div className="grid gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-4">
+                      {[
+                        "Secure frontend checkout",
+                        "Fast fulfillment workflow",
+                        "Dashboard tracking after purchase",
+                      ].map((item) => (
+                        <div key={item} className="flex items-center gap-3 text-sm text-slate-600">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+
+                    <Link to="/order" className="block">
+                      <Button
+                        className="h-12 w-full rounded-xl border-0 bg-[#2563EB] text-white shadow-[0_18px_45px_rgba(37,99,235,0.24)] hover:bg-[#1d4ed8]"
+                        onClick={handleOrder}
+                      >
+                        Continue to Order
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
