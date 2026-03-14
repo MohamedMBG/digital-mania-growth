@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  provider     String   @default("email")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model WalletTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  providerRef String?
+  amount      Decimal  @db.Decimal(12, 2)
+  currency    String   @default("USD")
+  type        String
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model QueueJobLog {
+  id         String   @id @default(cuid())
+  queueName  String
+  jobName    String
+  status     String
+  payload    Json?
+  createdAt  DateTime @default(now())
+}
