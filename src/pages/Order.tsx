@@ -1,42 +1,101 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { services } from "@/data/services";
-import { paymentMethods, savedCards } from "@/data/platform";
+import { services as fallbackServices } from "@/data/services";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  CheckCircle2,
-  ChevronRight,
-  Clock3,
-  CreditCard,
-  LockKeyhole,
-  ShieldCheck,
-} from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock3, LockKeyhole, Wallet } from "lucide-react";
+import { apiRequest, apiRequestWithRefresh, getApiErrorMessage } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
-const workflowSteps = [
-  "Pick a service",
-  "Paste your link",
-  "Choose payment",
-  "Confirm instantly",
-];
+const workflowSteps = ["Pick a service", "Paste your link", "Review wallet", "Confirm instantly"];
+const DRAFT_KEY = "nexora-order-draft";
+
+type ServiceOption = {
+  id: string;
+  name: string;
+  description: string;
+  pricePerK: number;
+  minOrder: number;
+  maxOrder: number;
+  deliverySpeed?: string | null;
+  platform: { name: string };
+};
+
+type WalletResponse = {
+  data: {
+    balance: number;
+    currency: string;
+  };
+};
 
 const Order = () => {
   const { toast } = useToast();
-  const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
+  const { refreshProfile } = useAuth();
+  const [services, setServices] = useState<ServiceOption[]>(
+    fallbackServices.map((service) => ({
+      ...service,
+      platform: { name: service.platform },
+    }))
+  );
+  const [serviceId, setServiceId] = useState("");
   const [link, setLink] = useState("");
   const [quantity, setQuantity] = useState(1000);
-  const [method, setMethod] = useState("card");
-  const [cardId, setCardId] = useState(savedCards[0]?.id ?? "");
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletCurrency, setWalletCurrency] = useState("USD");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [serviceResponse, walletResponse] = await Promise.all([
+          apiRequest<{ data: ServiceOption[] }>("/services?limit=100"),
+          apiRequestWithRefresh<WalletResponse>("/wallet"),
+        ]);
+
+        setServices(serviceResponse.data);
+        setServiceId((current) => current || serviceResponse.data[0]?.id || "");
+        setWalletBalance(walletResponse.data.balance);
+        setWalletCurrency(walletResponse.data.currency);
+      } catch (error) {
+        toast({
+          title: "Some order data could not load",
+          description: getApiErrorMessage(error),
+          variant: "destructive",
+        });
+      }
+    };
+
+    void loadData();
+  }, [toast]);
+
+  useEffect(() => {
+    const draftRaw = window.localStorage.getItem(DRAFT_KEY);
+    if (!draftRaw) return;
+
+    try {
+      const draft = JSON.parse(draftRaw) as {
+        serviceId?: string;
+        quantity?: number;
+        targetUrl?: string;
+      };
+
+      if (draft.serviceId) setServiceId(draft.serviceId);
+      if (draft.quantity) setQuantity(draft.quantity);
+      if (draft.targetUrl) setLink(draft.targetUrl);
+    } catch {
+      window.localStorage.removeItem(DRAFT_KEY);
+    }
+  }, []);
 
   const selectedService = useMemo(
     () => services.find((service) => service.id === serviceId) ?? services[0],
-    [serviceId]
+    [serviceId, services]
   );
 
   const clampedQuantity = useMemo(() => {
@@ -45,10 +104,10 @@ const Order = () => {
   }, [quantity, selectedService]);
 
   const totalPrice = selectedService
-    ? ((clampedQuantity / 1000) * selectedService.pricePerK).toFixed(2)
-    : "0.00";
+    ? Number(((clampedQuantity / 1000) * selectedService.pricePerK).toFixed(2))
+    : 0;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedService || !link.trim()) {
       toast({
         title: "Missing information",
@@ -58,10 +117,37 @@ const Order = () => {
       return;
     }
 
-    toast({
-      title: "Checkout complete",
-      description: `${clampedQuantity.toLocaleString()} ${selectedService.name} confirmed with ${paymentMethods.find((item) => item.id === method)?.name}.`,
-    });
+    try {
+      setSubmitting(true);
+
+      await apiRequestWithRefresh("/orders", {
+        method: "POST",
+        body: {
+          serviceId: selectedService.id,
+          quantity: clampedQuantity,
+          targetUrl: link.trim(),
+        },
+      });
+
+      window.localStorage.removeItem(DRAFT_KEY);
+      await refreshProfile();
+
+      const walletResponse = await apiRequestWithRefresh<WalletResponse>("/wallet");
+      setWalletBalance(walletResponse.data.balance);
+
+      toast({
+        title: "Order confirmed",
+        description: `${clampedQuantity.toLocaleString()} ${selectedService.name} has been created successfully.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Order failed",
+        description: getApiErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -73,13 +159,13 @@ const Order = () => {
           <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
             <div>
               <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-4 py-1.5 text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                Frontend checkout
+                Live checkout
               </Badge>
               <h1 className="mt-6 text-4xl font-semibold tracking-[-0.04em] text-[#111827] md:text-5xl">
-                Order in one clean, modern flow
+                Order in one clean, connected workflow
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-8 text-slate-600">
-                Configure the service, select a payment method, and complete your order with a streamlined frontend-only checkout experience.
+                Configure the service, review wallet balance, and place the order directly through the backend.
               </p>
             </div>
 
@@ -124,7 +210,9 @@ const Order = () => {
                             <div className="flex items-center justify-between gap-4">
                               <div>
                                 <p className="font-semibold text-[#111827]">{service.name}</p>
-                                <p className="mt-1 text-sm text-slate-500">{service.deliverySpeed} • {service.platform}</p>
+                                <p className="mt-1 text-sm text-slate-500">
+                                  {service.deliverySpeed || "Fast delivery"} • {service.platform.name}
+                                </p>
                               </div>
                               <div className="text-right">
                                 <p className="text-lg font-semibold text-[#111827]">${service.pricePerK}</p>
@@ -165,79 +253,10 @@ const Order = () => {
                       <Label className="mb-2 block text-sm font-medium text-slate-600">Delivery</Label>
                       <div className="flex h-12 items-center rounded-xl border border-slate-200 bg-[#F8FAFC] px-4 text-sm text-slate-600">
                         <Clock3 className="mr-2 h-4 w-4 text-[#2563EB]" />
-                        {selectedService?.deliverySpeed}
+                        {selectedService?.deliverySpeed || "Fast delivery"}
                       </div>
                     </div>
                   </div>
-
-                  <div>
-                    <p className="text-sm uppercase tracking-[0.2em] text-slate-400">Step 2</p>
-                    <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#111827]">Select payment method</h2>
-                    <div className="mt-5 grid gap-3">
-                      {paymentMethods.map((paymentMethod) => {
-                        const active = paymentMethod.id === method;
-                        return (
-                          <button
-                            key={paymentMethod.id}
-                            onClick={() => setMethod(paymentMethod.id)}
-                            className={`rounded-[1.25rem] border p-4 text-left transition-all ${
-                              active
-                                ? "border-[#2563EB] bg-[#2563EB]/5 shadow-sm"
-                                : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-sm">
-                                  <paymentMethod.icon className="h-5 w-5 text-[#2563EB]" />
-                                </div>
-                                <div>
-                                  <p className="font-semibold text-[#111827]">{paymentMethod.name}</p>
-                                  <p className="text-sm text-slate-500">{paymentMethod.desc}</p>
-                                </div>
-                              </div>
-                              <div className="text-right text-xs text-slate-500">
-                                <p>{paymentMethod.fee}</p>
-                                <p className="mt-1">{paymentMethod.eta}</p>
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {method === "card" && (
-                    <div className="rounded-[1.5rem] border border-slate-200 bg-[#F8FAFC] p-5">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4 text-[#2563EB]" />
-                        <p className="text-sm font-semibold text-[#111827]">Saved cards</p>
-                      </div>
-                      <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        {savedCards.map((card) => {
-                          const active = card.id === cardId;
-                          return (
-                            <button
-                              key={card.id}
-                              onClick={() => setCardId(card.id)}
-                              className={`rounded-[1.25rem] border p-4 text-left transition-all ${
-                                active
-                                  ? "border-[#111827] bg-white shadow-sm"
-                                  : "border-slate-200 bg-white hover:border-slate-300"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <p className="font-semibold text-[#111827]">{card.brand}</p>
-                                <p className="text-xs text-slate-400">{card.expires}</p>
-                              </div>
-                              <p className="mt-6 text-lg font-semibold tracking-[0.18em] text-[#111827]">**** {card.last4}</p>
-                              <p className="mt-3 text-sm text-slate-500">{card.holder}</p>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             </motion.div>
@@ -251,7 +270,7 @@ const Order = () => {
                       <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#111827]">Ready to confirm</h3>
                     </div>
                     <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
-                      Secure
+                      Wallet secure
                     </div>
                   </div>
 
@@ -265,20 +284,20 @@ const Order = () => {
                       <span className="font-medium text-[#111827]">{clampedQuantity.toLocaleString()}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-500">Payment</span>
-                      <span className="font-medium text-[#111827]">{paymentMethods.find((item) => item.id === method)?.name}</span>
+                      <span className="text-slate-500">Wallet balance</span>
+                      <span className="font-medium text-[#111827]">{walletCurrency} {walletBalance.toFixed(2)}</span>
                     </div>
                     <div className="flex items-center justify-between border-t border-slate-200 pt-4">
                       <span className="text-slate-500">Total</span>
-                      <span className="text-3xl font-semibold tracking-[-0.04em] text-[#111827]">${totalPrice}</span>
+                      <span className="text-3xl font-semibold tracking-[-0.04em] text-[#111827]">${totalPrice.toFixed(2)}</span>
                     </div>
                   </div>
 
                   <div className="mt-6 grid gap-3">
                     {[
-                      "Protected payment interface",
-                      "Immediate access in dashboard",
-                      "Fast post-purchase workflow",
+                      "Protected wallet deduction",
+                      "Order queued automatically",
+                      "Live order tracking in dashboard",
                     ].map((item) => (
                       <div key={item} className="flex items-center gap-3 rounded-[1rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
                         <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -293,9 +312,9 @@ const Order = () => {
                         <LockKeyhole className="h-4 w-4 text-[#2563EB]" />
                       </div>
                       <div>
-                        <p className="font-semibold text-[#111827]">Payments UI included</p>
+                        <p className="font-semibold text-[#111827]">Connected backend checkout</p>
                         <p className="mt-1 text-sm leading-6 text-slate-600">
-                          This is a frontend-only concept checkout designed to feel complete and production-ready.
+                          Orders are validated against service limits, wallet balance, and queue processing before they are created.
                         </p>
                       </div>
                     </div>
@@ -303,15 +322,15 @@ const Order = () => {
 
                   <Button
                     className="mt-8 h-12 w-full rounded-xl border-0 bg-[#2563EB] text-white shadow-[0_18px_45px_rgba(37,99,235,0.22)] hover:bg-[#1d4ed8]"
-                    onClick={handleSubmit}
+                    onClick={() => {
+                      void handleSubmit();
+                    }}
+                    disabled={submitting}
                   >
-                    Confirm Order
+                    <Wallet className="mr-2 h-4 w-4" />
+                    {submitting ? "Confirming..." : "Confirm Order"}
                     <ChevronRight className="ml-2 h-4 w-4" />
                   </Button>
-
-                  <p className="mt-4 text-center text-xs text-slate-500">
-                    Frontend-only checkout flow. No real payment is processed.
-                  </p>
                 </CardContent>
               </Card>
             </motion.div>

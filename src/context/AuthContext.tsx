@@ -6,87 +6,159 @@ import {
   useState,
   type ReactNode,
 } from "react";
-
-type AuthUser = {
-  name: string;
-  email: string;
-  provider: "email" | "google";
-};
+import {
+  apiRequest,
+  apiRequestWithRefresh,
+  AuthTokens,
+  AuthUser,
+  clearStoredSession,
+  getStoredSession,
+  setStoredSession,
+} from "@/lib/api";
 
 type AuthContextValue = {
   user: AuthUser | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => AuthUser;
-  register: (name: string, email: string, password: string) => AuthUser;
-  loginWithGoogle: () => AuthUser;
-  logout: () => void;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<AuthUser>;
+  register: (name: string, email: string, password: string) => Promise<AuthUser>;
+  logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  accessToken: string | null;
 };
-
-const STORAGE_KEY = "digital-mania-auth-user";
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const getInitialUser = (): AuthUser | null => {
-  if (typeof window === "undefined") return null;
+type AuthResponse = {
+  success: true;
+  message: string;
+  data: {
+    user: AuthUser;
+    tokens: AuthTokens;
+  };
+};
 
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw) as AuthUser;
-  } catch {
-    window.localStorage.removeItem(STORAGE_KEY);
-    return null;
-  }
+type MeResponse = {
+  success: true;
+  message: string;
+  data: {
+    user: AuthUser;
+  };
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<AuthUser | null>(getInitialUser);
+  const initialSession = getStoredSession();
+  const [user, setUser] = useState<AuthUser | null>(initialSession?.user ?? null);
+  const [accessToken, setAccessToken] = useState<string | null>(
+    initialSession?.accessToken ?? null
+  );
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    const initialize = async () => {
+      const session = getStoredSession();
 
-    if (user) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-    } else {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
-  }, [user]);
+      if (!session?.accessToken) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await apiRequestWithRefresh<MeResponse>("/auth/me", {
+          token: session.accessToken,
+        });
+
+        const nextSession = {
+          ...(getStoredSession() ?? session),
+          user: response.data.user,
+        };
+
+        setStoredSession(nextSession);
+        setUser(response.data.user);
+        setAccessToken(nextSession.accessToken);
+      } catch {
+        clearStoredSession();
+        setUser(null);
+        setAccessToken(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void initialize();
+  }, []);
+
+  const persistSession = (response: AuthResponse) => {
+    const nextSession = {
+      user: response.data.user,
+      accessToken: response.data.tokens.accessToken,
+      refreshToken: response.data.tokens.refreshToken,
+    };
+
+    setStoredSession(nextSession);
+    setUser(nextSession.user);
+    setAccessToken(nextSession.accessToken);
+
+    return nextSession.user;
+  };
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      isAuthenticated: Boolean(user),
-      login: (email: string) => {
-        const nextUser = {
-          name: email.split("@")[0] || "Creator",
-          email,
-          provider: "email" as const,
-        };
-        setUser(nextUser);
-        return nextUser;
+      accessToken,
+      isAuthenticated: Boolean(user && accessToken),
+      isLoading,
+      login: async (email: string, password: string) => {
+        const response = await apiRequest<AuthResponse>("/auth/login", {
+          method: "POST",
+          body: { email, password },
+        });
+
+        return persistSession(response);
       },
-      register: (name: string, email: string) => {
-        const nextUser = {
-          name: name.trim() || email.split("@")[0] || "Creator",
-          email,
-          provider: "email" as const,
-        };
-        setUser(nextUser);
-        return nextUser;
+      register: async (name: string, email: string, password: string) => {
+        const response = await apiRequest<AuthResponse>("/auth/register", {
+          method: "POST",
+          body: {
+            fullName: name,
+            email,
+            password,
+          },
+        });
+
+        return persistSession(response);
       },
-      loginWithGoogle: () => {
-        const nextUser = {
-          name: "Google Creator",
-          email: "creator.google@example.com",
-          provider: "google" as const,
-        };
-        setUser(nextUser);
-        return nextUser;
+      logout: async () => {
+        try {
+          if (accessToken) {
+            await apiRequestWithRefresh("/auth/logout", {
+              method: "POST",
+              token: accessToken,
+            });
+          }
+        } finally {
+          clearStoredSession();
+          setUser(null);
+          setAccessToken(null);
+        }
       },
-      logout: () => setUser(null),
+      refreshProfile: async () => {
+        const response = await apiRequestWithRefresh<MeResponse>("/auth/me", {
+          token: accessToken,
+        });
+
+        const session = getStoredSession();
+        if (session) {
+          setStoredSession({
+            ...session,
+            user: response.data.user,
+          });
+        }
+
+        setUser(response.data.user);
+      },
     }),
-    [user]
+    [accessToken, isLoading, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,13 +1,31 @@
-Use this as the integration contract between your existing frontend and the backend.
+# API Integration Guide
 
-**Base**
-- Base URL: `http://localhost:4000/api`
-- Auth: `Authorization: Bearer <accessToken>`
-- Refresh: `POST /auth/refresh` with `refreshToken`
-- Content-Type: `application/json`
+This document explains how to connect the existing frontend to the Digital Mania backend.
 
-**Response Shape**
-Success:
+## Base URL
+
+Use the backend API prefix configured in the environment.
+
+```text
+http://localhost:4000/api
+```
+
+Example:
+
+```text
+GET http://localhost:4000/api/services
+```
+
+## Common Conventions
+
+- `Content-Type: application/json`
+- Protected routes require `Authorization: Bearer <accessToken>`
+- Pagination is returned with a `meta` object
+- Successful responses use a consistent `success/message/data` shape
+- Errors come from the global exception filter in a consistent JSON format
+
+## Success Response Format
+
 ```json
 {
   "success": true,
@@ -24,7 +42,13 @@ Success:
 }
 ```
 
-Error:
+Notes:
+
+- `meta` is only present on paginated list endpoints
+- `data` may be an object, array, or `null`
+
+## Error Response Format
+
 ```json
 {
   "statusCode": 400,
@@ -34,19 +58,43 @@ Error:
 }
 ```
 
-**Auth Flow**
-1. `POST /auth/register` or `POST /auth/login`
-2. Store:
-   - `accessToken` in memory or secure storage
-   - `refreshToken` in secure storage
-3. Send `accessToken` on protected requests
-4. On `401`, call `POST /auth/refresh`
-5. Replace tokens and retry request
+Recommended frontend handling:
+
+- `400`: validation or business-rule error
+- `401`: session expired or invalid token
+- `403`: insufficient permissions
+- `404`: resource not found
+- `409`: duplicate/conflict case
+- `500`: unexpected server error
+
+## Authentication Flow
+
+The backend currently uses a bearer-token flow.
+
+### Login/Register Flow
+
+1. Call `POST /auth/register` or `POST /auth/login`
+2. Save:
+   - `accessToken`
+   - `refreshToken`
+   - `user`
+3. Send the `accessToken` in the `Authorization` header for protected routes
+4. If a request returns `401`, call `POST /auth/refresh`
+5. Replace stored tokens and retry the failed request
 6. On logout, call `POST /auth/logout` and clear local auth state
 
-Bearer-token flow is what the backend currently supports best for your frontend. If later you want stricter security, refresh token can move to `HttpOnly` cookie.
+### Why This Works Well With the Existing Frontend
 
-**Axios Setup**
+- easy to plug into axios interceptors
+- no frontend page changes are required
+- no cookie parsing is needed
+
+### Future Option
+
+If you want stricter production security later, the refresh token can be moved to an `HttpOnly`, `Secure`, `SameSite` cookie while keeping the rest of the backend auth logic mostly the same.
+
+## Axios Integration Example
+
 ```ts
 import axios from "axios";
 
@@ -60,39 +108,49 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("accessToken");
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
   return config;
 });
 ```
 
-Refresh example:
+### Refresh Token Helper
+
 ```ts
 export async function refreshSession() {
   const refreshToken = localStorage.getItem("refreshToken");
 
-  const { data } = await api.post("/auth/refresh", { refreshToken });
+  const response = await api.post("/auth/refresh", {
+    refreshToken,
+  });
 
-  localStorage.setItem("accessToken", data.data.tokens.accessToken);
-  localStorage.setItem("refreshToken", data.data.tokens.refreshToken);
+  const tokens = response.data.data.tokens;
 
-  return data.data.tokens.accessToken;
+  localStorage.setItem("accessToken", tokens.accessToken);
+  localStorage.setItem("refreshToken", tokens.refreshToken);
+
+  return tokens.accessToken;
 }
 ```
 
-Response retry example:
+### Axios 401 Retry Interceptor
+
 ```ts
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const original = error.config;
+    const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !original._retry) {
-      original._retry = true;
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
       const newAccessToken = await refreshSession();
-      original.headers.Authorization = `Bearer ${newAccessToken}`;
-      return api(original);
+      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+
+      return api(originalRequest);
     }
 
     return Promise.reject(error);
@@ -100,10 +158,50 @@ api.interceptors.response.use(
 );
 ```
 
-**Auth Examples**
-Register:
+### Error Message Helper
+
+```ts
+export function getApiErrorMessage(error: any) {
+  return (
+    error?.response?.data?.message ||
+    error?.message ||
+    "Something went wrong"
+  );
+}
+```
+
+## CORS Configuration
+
+The backend already supports frontend integration through environment-driven CORS.
+
+Set this in `backend/.env`:
+
+```env
+FRONTEND_URL=http://localhost:8080
+```
+
+For multiple frontend origins:
+
+```env
+FRONTEND_URL=http://localhost:8080,https://yourdomain.com
+```
+
+The backend CORS config supports:
+
+- allowed origins from `FRONTEND_URL`
+- `Authorization` header
+- `Content-Type` header
+- `credentials: true`
+
+## Auth API
+
+### Register
+
+`POST /auth/register`
+
+Request:
+
 ```json
-POST /auth/register
 {
   "email": "user@example.com",
   "password": "StrongPass123",
@@ -111,7 +209,8 @@ POST /auth/register
 }
 ```
 
-Login response:
+Response:
+
 ```json
 {
   "success": true,
@@ -128,8 +227,8 @@ Login response:
       "updatedAt": "2026-03-14T12:00:00.000Z"
     },
     "tokens": {
-      "accessToken": "jwt-access",
-      "refreshToken": "jwt-refresh",
+      "accessToken": "jwt-access-token",
+      "refreshToken": "jwt-refresh-token",
       "tokenType": "Bearer",
       "expiresIn": "15m",
       "refreshExpiresIn": "7d"
@@ -138,62 +237,208 @@ Login response:
 }
 ```
 
-Current user:
+### Login
+
+`POST /auth/login`
+
+Request:
+
 ```json
-GET /auth/me
-Authorization: Bearer <token>
+{
+  "email": "user@example.com",
+  "password": "StrongPass123"
+}
 ```
 
-**Catalog**
-Platforms:
+Response shape is the same as register.
+
+### Refresh
+
+`POST /auth/refresh`
+
+Request:
+
 ```json
-GET /platforms
+{
+  "refreshToken": "jwt-refresh-token"
+}
 ```
 
-Services with filters:
-```json
-GET /services?platformSlug=instagram&categorySlug=followers&page=1&limit=12
+### Logout
+
+`POST /auth/logout`
+
+Headers:
+
+```text
+Authorization: Bearer <accessToken>
 ```
 
-Service item:
+Response:
+
+```json
+{
+  "success": true,
+  "message": "Logged out successfully.",
+  "data": null
+}
+```
+
+### Current User
+
+`GET /auth/me`
+
+Headers:
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "message": "Authenticated user loaded successfully.",
+  "data": {
+    "user": {
+      "id": "clx123",
+      "email": "user@example.com",
+      "fullName": "Jane Doe",
+      "role": "customer",
+      "provider": "email",
+      "isActive": true,
+      "createdAt": "2026-03-14T12:00:00.000Z",
+      "updatedAt": "2026-03-14T12:00:00.000Z"
+    }
+  }
+}
+```
+
+## Catalog API
+
+### Platforms
+
+`GET /platforms`
+
+Response:
+
+```json
+{
+  "success": true,
+  "message": "Platforms loaded successfully.",
+  "data": [
+    {
+      "id": "plt_1",
+      "name": "Instagram",
+      "slug": "instagram",
+      "description": "Instagram growth services",
+      "icon": "instagram",
+      "sortOrder": 1
+    }
+  ]
+}
+```
+
+### Categories
+
+`GET /categories?platformSlug=instagram`
+
+### Services
+
+`GET /services?platformSlug=instagram&categorySlug=followers&page=1&limit=12`
+
+Example service object:
+
 ```json
 {
   "id": "svc_1",
   "name": "Instagram Followers",
   "slug": "instagram-followers",
+  "description": "High-quality followers",
+  "shortDescription": "Fast delivery",
   "pricePerK": 4.99,
   "minOrder": 100,
   "maxOrder": 100000,
+  "deliverySpeed": "0-2 hours",
+  "guarantee": "30-day guarantee",
+  "refillPolicy": "Auto-refill",
+  "isFeatured": true,
+  "isActive": true,
+  "sortOrder": 1,
+  "createdAt": "2026-03-14T12:00:00.000Z",
+  "updatedAt": "2026-03-14T12:00:00.000Z",
   "platform": {
+    "id": "plt_1",
     "name": "Instagram",
-    "slug": "instagram"
+    "slug": "instagram",
+    "icon": "instagram"
   },
   "category": {
+    "id": "cat_1",
     "name": "Followers",
     "slug": "followers"
   }
 }
 ```
 
-**Wallet**
-Wallet:
-```json
-GET /wallet
-Authorization: Bearer <token>
+### Featured Services
+
+`GET /services/featured?page=1&limit=6`
+
+### Service Details
+
+`GET /services/:slug`
+
+## Wallet API
+
+### Wallet Balance
+
+`GET /wallet`
+
+Headers:
+
+```text
+Authorization: Bearer <accessToken>
 ```
 
-Transactions:
+Response:
+
 ```json
-GET /wallet/transactions?page=1&limit=20&type=deposit
-Authorization: Bearer <token>
+{
+  "success": true,
+  "message": "Wallet loaded successfully.",
+  "data": {
+    "id": "wal_1",
+    "userId": "usr_1",
+    "balance": 125.5,
+    "currency": "USD",
+    "transactionCount": 12,
+    "createdAt": "2026-03-14T12:00:00.000Z",
+    "updatedAt": "2026-03-14T12:00:00.000Z"
+  }
+}
 ```
 
-**Payments**
-Create checkout:
-```json
-POST /payments/checkout
-Authorization: Bearer <token>
+### Wallet Transactions
 
+`GET /wallet/transactions?page=1&limit=20&type=deposit`
+
+## Payments API
+
+### Create Stripe Checkout Session
+
+`POST /payments/checkout`
+
+Headers:
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+Request:
+
+```json
 {
   "amount": 50,
   "currency": "usd"
@@ -201,6 +446,7 @@ Authorization: Bearer <token>
 ```
 
 Response:
+
 ```json
 {
   "success": true,
@@ -215,124 +461,298 @@ Response:
 }
 ```
 
-History:
-```json
-GET /payments/history?page=1&limit=20
-Authorization: Bearer <token>
+Important:
+
+- the frontend must redirect the user to the returned Stripe URL
+- the frontend must never trust redirect success as payment success
+- wallet credit is only applied after a verified Stripe webhook
+
+### Payment History
+
+`GET /payments/history?page=1&limit=20`
+
+Headers:
+
+```text
+Authorization: Bearer <accessToken>
 ```
 
-**Orders**
-Create:
-```json
-POST /orders
-Authorization: Bearer <token>
+## Orders API
 
+### Create Order
+
+`POST /orders`
+
+Headers:
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+Request:
+
+```json
 {
   "serviceId": "svc_1",
   "quantity": 1000,
   "targetUrl": "https://instagram.com/example",
-  "notes": "optional"
+  "notes": "Optional note"
 }
 ```
 
-List:
+Response:
+
 ```json
-GET /orders?page=1&limit=20&status=processing
-Authorization: Bearer <token>
+{
+  "success": true,
+  "message": "Order created successfully.",
+  "data": {
+    "id": "ord_1",
+    "quantity": 1000,
+    "chargeAmount": 4.99,
+    "currency": "USD",
+    "targetUrl": "https://instagram.com/example",
+    "status": "queued",
+    "providerServiceId": "1001",
+    "providerOrderId": null,
+    "startCount": null,
+    "remains": 1000,
+    "notes": "Optional note",
+    "canceledAt": null,
+    "createdAt": "2026-03-14T12:00:00.000Z",
+    "updatedAt": "2026-03-14T12:00:00.000Z",
+    "service": {
+      "id": "svc_1",
+      "name": "Instagram Followers",
+      "slug": "instagram-followers",
+      "platform": {
+        "name": "Instagram",
+        "slug": "instagram"
+      },
+      "category": {
+        "name": "Followers",
+        "slug": "followers"
+      }
+    },
+    "statusLogs": [
+      {
+        "id": "log_1",
+        "status": "pending",
+        "message": "Order created and awaiting provider queue dispatch.",
+        "metadata": {},
+        "createdAt": "2026-03-14T12:00:00.000Z"
+      }
+    ]
+  }
+}
 ```
 
-Cancel:
-```json
-PATCH /orders/:id/cancel
-Authorization: Bearer <token>
+### List Orders
+
+`GET /orders?page=1&limit=20&status=processing`
+
+### Order Details
+
+`GET /orders/:id`
+
+### Cancel Order
+
+`PATCH /orders/:id/cancel`
+
+## Tickets API
+
+### Create Ticket
+
+`POST /tickets`
+
+Headers:
+
+```text
+Authorization: Bearer <accessToken>
 ```
 
-**Tickets**
-Create:
-```json
-POST /tickets
-Authorization: Bearer <token>
+Request:
 
+```json
 {
   "subject": "Order delay",
   "message": "My order is still pending."
 }
 ```
 
-Reply:
-```json
-POST /tickets/:id/messages
-Authorization: Bearer <token>
+### List Tickets
 
+`GET /tickets?page=1&limit=20&status=open`
+
+Behavior:
+
+- customers only see their own tickets
+- admin and support can see all tickets
+
+### Ticket Details
+
+`GET /tickets/:id`
+
+### Reply To Ticket
+
+`POST /tickets/:id/messages`
+
+Request:
+
+```json
 {
-  "message": "Any update on this?"
+  "message": "Any update on this ticket?"
 }
 ```
 
-Close:
+### Close Ticket
+
+`PATCH /tickets/:id/close`
+
+## Admin API
+
+All admin endpoints require:
+
+- authenticated user
+- `role === "admin"`
+
+### Users
+
+`GET /admin/users?page=1&limit=20`
+
+### Orders
+
+`GET /admin/orders?page=1&limit=20`
+
+### Payments
+
+`GET /admin/payments?page=1&limit=20`
+
+### Create Service
+
+`POST /admin/services`
+
+Request:
+
 ```json
-PATCH /tickets/:id/close
-Authorization: Bearer <token>
-```
-
-**Admin**
-Use only when `user.role === "admin"`.
-
-Examples:
-```json
-GET /admin/users?page=1&limit=20
-GET /admin/orders?page=1&limit=20
-GET /admin/payments?page=1&limit=20
-POST /admin/providers/sync-services
-GET /admin/providers/balance
-```
-
-Wallet adjustment:
-```json
-POST /admin/wallet-adjustments
-Authorization: Bearer <token>
-
 {
-  "userId": "clx123",
+  "platformId": "plt_1",
+  "categoryId": "cat_1",
+  "name": "Instagram Followers",
+  "slug": "instagram-followers",
+  "providerServiceId": "1001",
+  "description": "High-quality followers",
+  "shortDescription": "Fast delivery",
+  "pricePerK": 4.99,
+  "minOrder": 100,
+  "maxOrder": 100000,
+  "deliverySpeed": "0-2 hours",
+  "guarantee": "30-day guarantee",
+  "refillPolicy": "Auto-refill",
+  "isFeatured": true,
+  "isActive": true,
+  "sortOrder": 1
+}
+```
+
+### Update Service
+
+`PATCH /admin/services/:id`
+
+### Sync Provider Services
+
+`POST /admin/providers/sync-services`
+
+Important:
+
+- this sync updates existing local services when it can match them
+- unmatched provider services are returned in the response
+- it does not guess `platformId` or `categoryId`
+
+### Provider Balance
+
+`GET /admin/providers/balance`
+
+### Update Order
+
+`PATCH /admin/orders/:id`
+
+Example:
+
+```json
+{
+  "status": "processing",
+  "startCount": 100,
+  "remains": 900,
+  "providerOrderId": "554433"
+}
+```
+
+### Wallet Adjustment
+
+`POST /admin/wallet-adjustments`
+
+Request:
+
+```json
+{
+  "userId": "usr_1",
   "amount": 25,
   "type": "adjustment",
-  "description": "Manual credit"
+  "description": "Manual admin credit"
 }
 ```
 
-**CORS**
-Your backend already supports frontend integration through:
-- origin allowlist from `FRONTEND_URL`
-- `Authorization` header
-- `credentials: true`
+## Suggested Frontend API Structure
 
-For local dev set in [backend/.env](C:/Users/pc/projectw/digital-mania-growth/backend/.env):
-```env
-FRONTEND_URL=http://localhost:8080
-```
+A clean frontend service split would look like this:
 
-For multiple frontend origins:
-```env
-FRONTEND_URL=http://localhost:8080,https://yourdomain.com
-```
+- `authApi.ts`
+- `catalogApi.ts`
+- `walletApi.ts`
+- `paymentsApi.ts`
+- `ordersApi.ts`
+- `ticketsApi.ts`
+- `adminApi.ts`
 
-**Frontend Error Handling**
-Recommended frontend mapping:
-- `400`: validation/business rule error
-- `401`: access token expired/invalid, try refresh
-- `403`: user lacks permission
-- `404`: resource missing
-- `409`: duplicate/conflict
-- `500`: server issue
+Example:
 
-Example helper:
 ```ts
-export function getApiErrorMessage(error: any) {
-  return (
-    error?.response?.data?.message ||
-    error?.message ||
-    "Something went wrong"
-  );
+export async function getServices(params?: Record<string, string | number>) {
+  const response = await api.get("/services", { params });
+  return response.data;
+}
+
+export async function createOrder(payload: {
+  serviceId: string;
+  quantity: number;
+  targetUrl: string;
+  notes?: string;
+}) {
+  const response = await api.post("/orders", payload);
+  return response.data;
 }
 ```
 
+## Final Integration Notes
+
+- use `accessToken` for all protected requests
+- refresh tokens on `401`
+- never trust frontend-only payment success
+- show backend `message` values directly when useful
+- consume list responses with `data` + `meta`
+- consume detail responses with `data`
+
+## Local File References
+
+Relevant backend files:
+
+- [main.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/main.ts)
+- [config.module.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/config/config.module.ts)
+- [global-exception.filter.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/common/filters/global-exception.filter.ts)
+- [auth.controller.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/auth/auth.controller.ts)
+- [wallet.controller.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/wallet/wallet.controller.ts)
+- [payments.controller.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/payments/payments.controller.ts)
+- [orders.controller.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/orders/orders.controller.ts)
+- [tickets.controller.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/tickets/tickets.controller.ts)
+- [admin.controller.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/admin/admin.controller.ts)

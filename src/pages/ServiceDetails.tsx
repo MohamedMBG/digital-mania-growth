@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { services } from "@/data/services";
+import { services as fallbackServices } from "@/data/services";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,23 +11,62 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import {
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle2,
-  Clock3,
-  RefreshCcw,
-  Shield,
-  Sparkles,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, RefreshCcw, Shield, Sparkles } from "lucide-react";
+import { apiRequest, getApiErrorMessage } from "@/lib/api";
+
+type ServiceDetailsData = {
+  id: string;
+  name: string;
+  slug?: string;
+  description: string;
+  pricePerK: number;
+  minOrder: number;
+  maxOrder: number;
+  deliverySpeed?: string | null;
+  guarantee?: string | null;
+  refillPolicy?: string | null;
+  platform: { name: string; slug?: string };
+};
+
+const DRAFT_KEY = "nexora-order-draft";
 
 const ServiceDetails = () => {
-  const { id } = useParams();
+  const { id = "" } = useParams();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
-  const service = services.find((item) => item.id === id);
+  const [service, setService] = useState<ServiceDetailsData | null>(() => {
+    const fallback = fallbackServices.find((item) => item.id === id);
+    if (!fallback) return null;
+
+    return {
+      ...fallback,
+      platform: { name: fallback.platform },
+    };
+  });
   const [link, setLink] = useState("");
   const [quantity, setQuantity] = useState(1000);
+
+  useEffect(() => {
+    const loadService = async () => {
+      try {
+        const response = await apiRequest<{ data: ServiceDetailsData }>(`/services/${id}`);
+        setService(response.data);
+      } catch (error) {
+        if (!service) {
+          toast({
+            title: "Service unavailable",
+            description: getApiErrorMessage(error),
+            variant: "destructive",
+          });
+        }
+      }
+    };
+
+    if (id) {
+      void loadService();
+    }
+  }, [id, service, toast]);
 
   const clampedQuantity = useMemo(() => {
     if (!service) return 0;
@@ -55,20 +94,11 @@ const ServiceDetails = () => {
   }
 
   const totalPrice = ((clampedQuantity / 1000) * service.pricePerK).toFixed(2);
-  const relatedServices = services
-    .filter((item) => item.platform === service.platform && item.id !== service.id)
+  const relatedServices = fallbackServices
+    .filter((item) => item.platform === service.platform.name && item.id !== service.id)
     .slice(0, 3);
-  const checkoutHref = isAuthenticated ? "/order" : "/register?redirect=%2Forder";
 
   const handleOrder = () => {
-    if (!isAuthenticated) {
-      toast({
-        title: "Create an account first",
-        description: "Open your account with Google or email and password before placing an order.",
-      });
-      return;
-    }
-
     if (!link.trim()) {
       toast({
         title: "Link required",
@@ -78,10 +108,25 @@ const ServiceDetails = () => {
       return;
     }
 
-    toast({
-      title: "Draft order ready",
-      description: `${clampedQuantity.toLocaleString()} ${service.name} prepared for checkout.`,
-    });
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        serviceId: service.id,
+        quantity: clampedQuantity,
+        targetUrl: link.trim(),
+      })
+    );
+
+    if (!isAuthenticated) {
+      toast({
+        title: "Create an account first",
+        description: "Open your account before placing an order.",
+      });
+      navigate(`/register?redirect=${encodeURIComponent("/order")}`);
+      return;
+    }
+
+    navigate("/order");
   };
 
   return (
@@ -101,7 +146,7 @@ const ServiceDetails = () => {
           <div className="mt-8 grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
             <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
               <Badge variant="outline" className="rounded-full border-[#2563EB]/15 bg-[#2563EB]/5 px-3 py-1 text-[#2563EB]">
-                {service.platform}
+                {service.platform.name}
               </Badge>
               <h1 className="mt-5 text-4xl font-semibold tracking-[-0.04em] text-[#111827] md:text-5xl">
                 {service.name}
@@ -110,9 +155,9 @@ const ServiceDetails = () => {
 
               <div className="mt-8 grid gap-4 sm:grid-cols-2">
                 {[
-                  { icon: Clock3, label: "Delivery speed", value: service.deliverySpeed },
-                  { icon: Shield, label: "Guarantee", value: service.guarantee },
-                  { icon: RefreshCcw, label: "Refill policy", value: service.refillPolicy },
+                  { icon: Clock3, label: "Delivery speed", value: service.deliverySpeed || "Fast delivery" },
+                  { icon: Shield, label: "Guarantee", value: service.guarantee || "Protected order flow" },
+                  { icon: RefreshCcw, label: "Refill policy", value: service.refillPolicy || "No refill needed" },
                   { icon: Sparkles, label: "Quality", value: "Premium engagement flow" },
                 ].map((item) => (
                   <Card key={item.label} className="rounded-[1.5rem] border border-slate-200 bg-[#F8FAFC] shadow-none">
@@ -144,8 +189,8 @@ const ServiceDetails = () => {
                 <div className="mt-6 grid gap-3 md:grid-cols-3">
                   {[
                     "Fast ordering workflow",
-                    "Safe frontend checkout flow",
-                    "Designed to support launch momentum",
+                    "Wallet-backed checkout",
+                    "Dashboard tracking after purchase",
                   ].map((item) => (
                     <div key={item} className="rounded-[1.25rem] bg-[#F8FAFC] px-4 py-4 text-sm font-medium text-slate-600">
                       {item}
@@ -230,21 +275,13 @@ const ServiceDetails = () => {
                         <span>{clampedQuantity.toLocaleString()} units</span>
                         <span>${service.pricePerK} / 1K</span>
                       </div>
-                      <div className="mt-4 h-2 rounded-full bg-white">
-                        <div
-                          className="h-2 rounded-full bg-[linear-gradient(135deg,#2563EB,#7C3AED)]"
-                          style={{
-                            width: `${Math.max(12, (clampedQuantity / service.maxOrder) * 100)}%`,
-                          }}
-                        />
-                      </div>
                     </div>
 
                     <div className="grid gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-4">
                       {[
-                        "Secure frontend checkout",
+                        "Secure account-gated checkout",
                         "Fast fulfillment workflow",
-                        "Dashboard tracking after purchase",
+                        "Live dashboard tracking after purchase",
                       ].map((item) => (
                         <div key={item} className="flex items-center gap-3 text-sm text-slate-600">
                           <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -253,15 +290,13 @@ const ServiceDetails = () => {
                       ))}
                     </div>
 
-                    <Link to={checkoutHref} className="block">
-                      <Button
-                        className="h-12 w-full rounded-xl border-0 bg-[#2563EB] text-white shadow-[0_18px_45px_rgba(37,99,235,0.24)] hover:bg-[#1d4ed8]"
-                        onClick={handleOrder}
-                      >
-                        {isAuthenticated ? "Continue to Order" : "Create Account to Order"}
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </Link>
+                    <Button
+                      className="h-12 w-full rounded-xl border-0 bg-[#2563EB] text-white shadow-[0_18px_45px_rgba(37,99,235,0.24)] hover:bg-[#1d4ed8]"
+                      onClick={handleOrder}
+                    >
+                      {isAuthenticated ? "Continue to Order" : "Create Account to Order"}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

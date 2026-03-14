@@ -1,35 +1,96 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { mockOrders, savedCards, walletActivity } from "@/data/platform";
-import {
-  ArrowRight,
-  CreditCard,
-  DollarSign,
-  Plus,
-  ShieldCheck,
-  Sparkles,
-  TrendingUp,
-  Wallet,
-} from "lucide-react";
+import { ArrowRight, DollarSign, Plus, ShieldCheck, TrendingUp, Wallet } from "lucide-react";
+import { apiRequestWithRefresh, getApiErrorMessage } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+
+type OrderItem = {
+  id: string;
+  targetUrl: string;
+  quantity: number;
+  chargeAmount: number;
+  status: string;
+  remains: number | null;
+  createdAt: string;
+  service?: { name: string; platform?: { name: string } };
+};
+
+type WalletResponse = {
+  data: {
+    balance: number;
+    currency: string;
+  };
+};
+
+type PaymentItem = {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  createdAt: string;
+  description?: string | null;
+};
 
 const statusClasses: Record<string, string> = {
-  Completed: "bg-emerald-50 text-emerald-600",
-  "In Progress": "bg-blue-50 text-blue-600",
-  Pending: "bg-amber-50 text-amber-700",
+  completed: "bg-emerald-50 text-emerald-600",
+  processing: "bg-blue-50 text-blue-600",
+  queued: "bg-blue-50 text-blue-600",
+  pending: "bg-amber-50 text-amber-700",
+  partial: "bg-orange-50 text-orange-700",
+  canceled: "bg-slate-100 text-slate-600",
+  failed: "bg-rose-50 text-rose-600",
 };
 
 const Dashboard = () => {
+  const { toast } = useToast();
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletCurrency, setWalletCurrency] = useState("USD");
+  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [payments, setPayments] = useState<PaymentItem[]>([]);
+
+  useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        const [walletResponse, orderResponse, paymentResponse] = await Promise.all([
+          apiRequestWithRefresh<WalletResponse>("/wallet"),
+          apiRequestWithRefresh<{ data: OrderItem[] }>("/orders?limit=6"),
+          apiRequestWithRefresh<{ data: PaymentItem[] }>("/payments/history?limit=4"),
+        ]);
+
+        setWalletBalance(walletResponse.data.balance);
+        setWalletCurrency(walletResponse.data.currency);
+        setOrders(orderResponse.data);
+        setPayments(paymentResponse.data);
+      } catch (error) {
+        toast({
+          title: "Dashboard data failed to load",
+          description: getApiErrorMessage(error),
+          variant: "destructive",
+        });
+      }
+    };
+
+    void loadDashboard();
+  }, [toast]);
+
+  const activeCampaigns = orders.filter((order) =>
+    ["queued", "processing", "pending", "partial"].includes(order.status)
+  ).length;
+  const monthlySpend = orders.reduce((sum, order) => sum + order.chargeAmount, 0);
+  const completedPayments = payments.filter((payment) => payment.status === "succeeded").length;
+
   const stats = [
-    { label: "Available balance", value: "$124.50", icon: Wallet },
-    { label: "Monthly spend", value: "$284.19", icon: DollarSign },
-    { label: "Active campaigns", value: "3", icon: TrendingUp },
-    { label: "Saved methods", value: `${savedCards.length}`, icon: CreditCard },
+    { label: "Available balance", value: `${walletCurrency} ${walletBalance.toFixed(2)}`, icon: Wallet },
+    { label: "Tracked spend", value: `$${monthlySpend.toFixed(2)}`, icon: DollarSign },
+    { label: "Active campaigns", value: `${activeCampaigns}`, icon: TrendingUp },
+    { label: "Successful top-ups", value: `${completedPayments}`, icon: ShieldCheck },
   ];
 
   return (
@@ -47,7 +108,7 @@ const Dashboard = () => {
                 Everything you need in one clean dashboard
               </h1>
               <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-                Track orders, manage payments, and move quickly between new campaigns and wallet activity.
+                Track orders, manage wallet funds, and launch the next campaign without leaving your workspace.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -59,7 +120,7 @@ const Dashboard = () => {
               </Link>
               <Link to="/add-funds">
                 <Button variant="outline" className="rounded-xl border-slate-200 bg-white text-[#111827] hover:bg-slate-50">
-                  <CreditCard className="mr-2 h-4 w-4" />
+                  <Wallet className="mr-2 h-4 w-4" />
                   Add Funds
                 </Button>
               </Link>
@@ -109,37 +170,49 @@ const Dashboard = () => {
                   </div>
 
                   <div className="mt-6 space-y-4">
-                    {mockOrders.map((order) => (
-                      <div key={order.id} className="rounded-[1.5rem] border border-slate-200 bg-[#F8FAFC] p-5">
-                        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-semibold text-[#111827]">{order.service}</p>
-                              <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClasses[order.status]}`}>
-                                {order.status}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-sm text-slate-500">{order.link}</p>
-                          </div>
-                          <div className="text-left md:text-right">
-                            <p className="text-sm text-slate-500">{order.id}</p>
-                            <p className="mt-1 font-semibold text-[#111827]">{order.spent}</p>
-                          </div>
-                        </div>
-                        <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
-                          <div>
-                            <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.16em] text-slate-400">
-                              <span>Delivery progress</span>
-                              <span>{order.progress}%</span>
-                            </div>
-                            <Progress value={order.progress} className="h-2 bg-white" />
-                          </div>
-                          <div className="text-sm text-slate-500">
-                            Qty {order.qty.toLocaleString()} • {order.date}
-                          </div>
-                        </div>
+                    {orders.length === 0 && (
+                      <div className="rounded-[1.5rem] border border-slate-200 bg-[#F8FAFC] p-6 text-sm text-slate-500">
+                        No orders yet. Create your first campaign to start tracking performance here.
                       </div>
-                    ))}
+                    )}
+
+                    {orders.map((order) => {
+                      const delivered = order.remains === null ? 0 : Math.max(order.quantity - order.remains, 0);
+                      const progress = order.quantity > 0 ? Math.min(Math.round((delivered / order.quantity) * 100), 100) : 0;
+                      const statusClass = statusClasses[order.status] ?? "bg-slate-100 text-slate-600";
+
+                      return (
+                        <div key={order.id} className="rounded-[1.5rem] border border-slate-200 bg-[#F8FAFC] p-5">
+                          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-semibold text-[#111827]">{order.service?.name || "Service"}</p>
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${statusClass}`}>
+                                  {order.status}
+                                </span>
+                              </div>
+                              <p className="mt-2 text-sm text-slate-500">{order.targetUrl}</p>
+                            </div>
+                            <div className="text-left md:text-right">
+                              <p className="text-sm text-slate-500">{order.id}</p>
+                              <p className="mt-1 font-semibold text-[#111827]">${order.chargeAmount.toFixed(2)}</p>
+                            </div>
+                          </div>
+                          <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
+                            <div>
+                              <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.16em] text-slate-400">
+                                <span>Delivery progress</span>
+                                <span>{progress}%</span>
+                              </div>
+                              <Progress value={progress} className="h-2 bg-white" />
+                            </div>
+                            <div className="text-sm text-slate-500">
+                              Qty {order.quantity.toLocaleString()} • {new Date(order.createdAt).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
@@ -149,9 +222,9 @@ const Dashboard = () => {
               <Card className="rounded-[2rem] border-0 bg-[linear-gradient(135deg,#2563EB_0%,#4F46E5_55%,#7C3AED_100%)] shadow-[0_26px_70px_rgba(79,70,229,0.24)]">
                 <CardContent className="p-7 text-white">
                   <p className="text-sm uppercase tracking-[0.2em] text-white/70">Wallet</p>
-                  <p className="mt-3 text-4xl font-semibold tracking-[-0.05em]">$124.50</p>
+                  <p className="mt-3 text-4xl font-semibold tracking-[-0.05em]">{walletCurrency} {walletBalance.toFixed(2)}</p>
                   <p className="mt-3 max-w-sm text-sm leading-6 text-white/80">
-                    Use your balance for faster repeat orders and frictionless campaign launches.
+                    Keep your balance ready for faster repeat orders and frictionless campaign launches.
                   </p>
                   <div className="mt-6 flex gap-3">
                     <Link to="/add-funds">
@@ -172,42 +245,25 @@ const Dashboard = () => {
                 <CardContent className="p-7">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4 text-[#2563EB]" />
-                    <p className="font-semibold text-[#111827]">Saved payment methods</p>
+                    <p className="font-semibold text-[#111827]">Recent top-ups</p>
                   </div>
                   <div className="mt-5 space-y-3">
-                    {savedCards.map((card) => (
-                      <div key={card.id} className="rounded-[1.25rem] border border-slate-200 bg-[#F8FAFC] p-4">
+                    {payments.length === 0 && (
+                      <div className="rounded-[1.25rem] border border-slate-200 bg-[#F8FAFC] p-4 text-sm text-slate-500">
+                        No payments recorded yet.
+                      </div>
+                    )}
+                    {payments.map((payment) => (
+                      <div key={payment.id} className="rounded-[1.25rem] border border-slate-200 bg-[#F8FAFC] p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="font-semibold text-[#111827]">{card.brand} **** {card.last4}</p>
-                            <p className="mt-1 text-sm text-slate-500">{card.holder}</p>
+                            <p className="font-semibold text-[#111827]">{payment.description || "Wallet top-up"}</p>
+                            <p className="mt-1 text-sm text-slate-500">{new Date(payment.createdAt).toLocaleDateString()}</p>
                           </div>
-                          <p className="text-sm text-slate-400">{card.expires}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-[2rem] border border-slate-200 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.05)]">
-                <CardContent className="p-7">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-[#2563EB]" />
-                    <p className="font-semibold text-[#111827]">Wallet activity</p>
-                  </div>
-                  <div className="mt-5 space-y-4">
-                    {walletActivity.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between gap-4 rounded-[1.25rem] border border-slate-200 bg-[#F8FAFC] p-4">
-                        <div>
-                          <p className="font-medium text-[#111827]">{item.title}</p>
-                          <p className="mt-1 text-sm text-slate-500">{item.date}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className={`font-semibold ${item.amount.startsWith("+") ? "text-emerald-600" : "text-[#111827]"}`}>
-                            {item.amount}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-400">{item.status}</p>
+                          <div className="text-right">
+                            <p className="font-semibold text-[#111827]">+${payment.amount.toFixed(2)}</p>
+                            <p className="mt-1 text-xs uppercase text-slate-400">{payment.status}</p>
+                          </div>
                         </div>
                       </div>
                     ))}

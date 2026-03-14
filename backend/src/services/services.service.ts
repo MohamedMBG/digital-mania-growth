@@ -99,10 +99,10 @@ export class ServicesService {
     };
   }
 
-  async getServiceBySlug(slug: string) {
+  async getServiceBySlug(slugOrId: string) {
     const service = await this.prisma.service.findFirst({
       where: {
-        slug,
+        OR: [{ slug: slugOrId }, { id: slugOrId }],
         isActive: true,
         platform: { isActive: true },
         category: { isActive: true },

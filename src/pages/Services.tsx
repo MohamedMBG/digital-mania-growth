@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import Header from "@/components/Header";
@@ -7,22 +7,73 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { services, platforms } from "@/data/services";
+import { services as fallbackServices, platforms as fallbackPlatforms } from "@/data/services";
 import { ArrowRight, Clock3, Search, ShieldCheck, Sparkles, TrendingUp } from "lucide-react";
+import { apiRequest, getApiErrorMessage } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+
+type CatalogPlatform = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+type CatalogService = {
+  id: string;
+  name: string;
+  slug?: string;
+  description: string;
+  pricePerK: number;
+  minOrder: number;
+  maxOrder: number;
+  deliverySpeed?: string | null;
+  platform: { name: string; slug?: string };
+};
 
 const Services = () => {
+  const { toast } = useToast();
   const [activePlatform, setActivePlatform] = useState("All");
   const [search, setSearch] = useState("");
+  const [services, setServices] = useState<CatalogService[]>(
+    fallbackServices.map((service) => ({
+      ...service,
+      platform: { name: service.platform },
+    }))
+  );
+  const [platforms, setPlatforms] = useState<string[]>(fallbackPlatforms);
+
+  useEffect(() => {
+    const loadCatalog = async () => {
+      try {
+        const [platformResponse, serviceResponse] = await Promise.all([
+          apiRequest<{ data: CatalogPlatform[] }>("/platforms"),
+          apiRequest<{ data: CatalogService[] }>("/services?limit=100"),
+        ]);
+
+        setPlatforms(["All", ...platformResponse.data.map((platform) => platform.name)]);
+        setServices(serviceResponse.data);
+      } catch (error) {
+        toast({
+          title: "Using saved catalog preview",
+          description: getApiErrorMessage(error),
+          variant: "destructive",
+        });
+      }
+    };
+
+    void loadCatalog();
+  }, [toast]);
 
   const filtered = useMemo(() => {
     return services.filter((service) => {
-      const platformMatch = activePlatform === "All" || service.platform === activePlatform;
+      const platformName = service.platform?.name ?? "";
+      const platformMatch = activePlatform === "All" || platformName === activePlatform;
       const searchMatch =
         service.name.toLowerCase().includes(search.toLowerCase()) ||
         service.description.toLowerCase().includes(search.toLowerCase());
       return platformMatch && searchMatch;
     });
-  }, [activePlatform, search]);
+  }, [activePlatform, search, services]);
 
   return (
     <div className="min-h-screen bg-white text-[#111827]">
@@ -47,7 +98,7 @@ const Services = () => {
               {[
                 { label: "Premium catalog", value: `${services.length}+ services`, icon: Sparkles },
                 { label: "Quick starts", value: "Orders begin fast", icon: TrendingUp },
-                { label: "Protected checkout", value: "Frontend payment flow", icon: ShieldCheck },
+                { label: "Protected checkout", value: "Wallet-first ordering", icon: ShieldCheck },
               ].map((item) => (
                 <Card key={item.label} className="rounded-[1.5rem] border border-slate-200 bg-[#F8FAFC] shadow-none">
                   <CardContent className="p-5">
@@ -103,7 +154,7 @@ const Services = () => {
             <p className="text-sm text-slate-500">
               Showing <span className="font-semibold text-[#111827]">{filtered.length}</span> services
             </p>
-            <p className="hidden text-sm text-slate-500 md:block">Minimal UI. Faster ordering. Frontend-only payments.</p>
+            <p className="hidden text-sm text-slate-500 md:block">Minimal UI. Fast ordering. Real backend checkout.</p>
           </div>
 
           <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
@@ -119,17 +170,17 @@ const Services = () => {
                   <CardContent className="flex h-full flex-col p-7">
                     <div className="flex items-center justify-between">
                       <Badge variant="outline" className="rounded-full border-[#2563EB]/15 bg-[#2563EB]/5 px-3 py-1 text-[#2563EB]">
-                        {service.platform}
+                        {service.platform?.name}
                       </Badge>
                       <div className="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
                         <Clock3 className="h-3.5 w-3.5" />
-                        {service.deliverySpeed}
+                        {service.deliverySpeed || "Fast delivery"}
                       </div>
                     </div>
 
                     <div className="mt-4 flex gap-2">
-                      <div className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">⚡ Instant-ready</div>
-                      <div className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-600">🔥 High demand</div>
+                      <div className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">Instant-ready</div>
+                      <div className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-600">Trending</div>
                     </div>
 
                     <h3 className="mt-5 text-xl font-semibold tracking-[-0.03em] text-[#111827]">{service.name}</h3>

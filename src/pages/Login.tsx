@@ -10,27 +10,35 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { CheckCircle2, ShieldCheck } from "lucide-react";
+import { getApiErrorMessage } from "@/lib/api";
 
 const Login = () => {
   const { toast } = useToast();
-  const { login, loginWithGoogle } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(email, password);
-    toast({ title: "Signed in", description: "Welcome back to NEXORA." });
-    navigate(redirect);
-  };
 
-  const handleGoogle = () => {
-    loginWithGoogle();
-    toast({ title: "Signed in with Google", description: "Your account is ready to continue." });
-    navigate(redirect);
+    try {
+      setSubmitting(true);
+      await login(email, password);
+      toast({ title: "Signed in", description: "Welcome back to NEXORA." });
+      navigate(redirect);
+    } catch (error) {
+      toast({
+        title: "Sign in failed",
+        description: getApiErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -52,7 +60,7 @@ const Login = () => {
                 {[
                   "Dashboard is only available to account holders",
                   "Orders require an account before checkout",
-                  "Google or email sign-in supported",
+                  "Email sign-in is live now",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-3 text-sm text-slate-600">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -78,9 +86,9 @@ const Login = () => {
                   type="button"
                   variant="outline"
                   className="h-12 w-full rounded-xl border-slate-200 bg-white text-[#111827] hover:bg-slate-50"
-                  onClick={handleGoogle}
+                  disabled
                 >
-                  Continue with Google
+                  Google sign-in coming soon
                 </Button>
 
                 <div className="my-5 flex items-center gap-3">
@@ -113,7 +121,7 @@ const Login = () => {
                     />
                   </div>
                   <Button type="submit" className="h-12 w-full rounded-xl border-0 bg-[#2563EB] text-white hover:bg-[#1d4ed8]">
-                    Sign In
+                    {submitting ? "Signing In..." : "Sign In"}
                   </Button>
                 </form>
 

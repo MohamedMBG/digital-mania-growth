@@ -71,12 +71,14 @@ const Header = () => {
                 </Button>
               </Link>
               <div className="rounded-full bg-slate-50 px-4 py-2 text-sm text-slate-600">
-                {user?.name}
+                {user?.fullName || user?.email}
               </div>
               <Button
                 variant="ghost"
                 className="rounded-full text-slate-600 hover:text-[#111827]"
-                onClick={logout}
+                onClick={() => {
+                  void logout();
+                }}
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
@@ -138,7 +140,7 @@ const Header = () => {
                       variant="outline"
                       className="w-full rounded-xl border-slate-200 bg-white text-[#111827]"
                       onClick={() => {
-                        logout();
+                        void logout();
                         setMobileOpen(false);
                       }}
                     >

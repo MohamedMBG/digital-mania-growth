@@ -10,28 +10,36 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { CheckCircle2, Sparkles } from "lucide-react";
+import { getApiErrorMessage } from "@/lib/api";
 
 const Register = () => {
   const { toast } = useToast();
-  const { register, loginWithGoogle } = useAuth();
+  const { register } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    register(name, email, password);
-    toast({ title: "Account created", description: "Your account is ready. You can continue now." });
-    navigate(redirect);
-  };
 
-  const handleGoogle = () => {
-    loginWithGoogle();
-    toast({ title: "Google account connected", description: "Your workspace is ready to use." });
-    navigate(redirect);
+    try {
+      setSubmitting(true);
+      await register(name, email, password);
+      toast({ title: "Account created", description: "Your account is ready. You can continue now." });
+      navigate(redirect);
+    } catch (error) {
+      toast({
+        title: "Registration failed",
+        description: getApiErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -54,7 +62,7 @@ const Register = () => {
               <div className="mt-8 space-y-3">
                 {[
                   "Required before checkout",
-                  "Google sign-up available",
+                  "Email sign-up is live now",
                   "Dashboard unlocked after registration",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-3 text-sm text-slate-600">
@@ -81,9 +89,9 @@ const Register = () => {
                   type="button"
                   variant="outline"
                   className="h-12 w-full rounded-xl border-slate-200 bg-white text-[#111827] hover:bg-slate-50"
-                  onClick={handleGoogle}
+                  disabled
                 >
-                  Continue with Google
+                  Google sign-up coming soon
                 </Button>
 
                 <div className="my-5 flex items-center gap-3">
@@ -126,7 +134,7 @@ const Register = () => {
                     />
                   </div>
                   <Button type="submit" className="h-12 w-full rounded-xl border-0 bg-[#2563EB] text-white hover:bg-[#1d4ed8]">
-                    Create Account
+                    {submitting ? "Creating Account..." : "Create Account"}
                   </Button>
                 </form>
 
