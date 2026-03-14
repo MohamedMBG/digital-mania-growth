@@ -6,6 +6,7 @@ import { CategoriesModule } from "./categories/categories.module";
 import { CommonModule } from "./common/common.module";
 import { AppConfigModule } from "./config/config.module";
 import { HealthModule } from "./health/health.module";
+import { OrdersModule } from "./orders/orders.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { PaymentsModule } from "./payments/payments.module";
 import { PlatformsModule } from "./platforms/platforms.module";
@@ -27,6 +28,7 @@ import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
     WalletModule,
     AuthModule,
     PaymentsModule,
+    OrdersModule,
     PlatformsModule,
     CategoriesModule,
     ServicesModule,
