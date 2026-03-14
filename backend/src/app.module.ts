@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { AuthModule } from "./auth/auth.module";
+import { AdminModule } from "./admin/admin.module";
 import { RolesGuard } from "./auth/guards/roles.guard";
 import { CategoriesModule } from "./categories/categories.module";
 import { CommonModule } from "./common/common.module";
@@ -28,6 +29,7 @@ import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
     UsersModule,
     WalletModule,
     AuthModule,
+    AdminModule,
     PaymentsModule,
     OrdersModule,
     ProviderModule,

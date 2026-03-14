@@ -55,6 +55,7 @@ model User {
 
   wallet Wallet?
   orders Order[]
+  adminActionLogs AdminActionLog[]
 }
 
 model Wallet {
@@ -225,4 +226,19 @@ model QueueJobLog {
   status     String
   payload    Json?
   createdAt  DateTime @default(now())
+}
+
+model AdminActionLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([actorId, createdAt])
+  @@index([entityType, createdAt])
 }
