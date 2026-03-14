@@ -10,6 +10,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { PlatformsModule } from "./platforms/platforms.module";
 import { ServicesModule } from "./services/services.module";
 import { UsersModule } from "./users/users.module";
+import { WalletModule } from "./wallet/wallet.module";
 import { RedisModule } from "./infrastructure/redis/redis.module";
 import { QueueModule } from "./infrastructure/queue/queue.module";
 import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
@@ -22,6 +23,7 @@ import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
     RedisModule,
     QueueModule,
     UsersModule,
+    WalletModule,
     AuthModule,
     PlatformsModule,
     CategoriesModule,

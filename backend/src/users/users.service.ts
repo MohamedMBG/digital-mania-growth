@@ -31,6 +31,9 @@ export class UsersService {
           passwordHash: data.passwordHash,
           role: data.role ?? UserRole.customer,
           provider: "email",
+          wallet: {
+            create: {},
+          },
         },
       });
     } catch (error) {
