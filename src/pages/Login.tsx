@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -8,16 +8,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 import { CheckCircle2, ShieldCheck } from "lucide-react";
 
 const Login = () => {
   const { toast } = useToast();
+  const { login, loginWithGoogle } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirect = searchParams.get("redirect") || "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    login(email, password);
     toast({ title: "Signed in", description: "Welcome back to Digital Mania." });
+    navigate(redirect);
+  };
+
+  const handleGoogle = () => {
+    loginWithGoogle();
+    toast({ title: "Signed in with Google", description: "Your account is ready to continue." });
+    navigate(redirect);
   };
 
   return (
@@ -33,13 +46,13 @@ const Login = () => {
               </Badge>
               <h1 className="mt-6 text-4xl font-semibold tracking-[-0.04em] md:text-5xl">Sign in to your growth workspace</h1>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                Access your dashboard, wallet, orders, and payment setup from one minimal interface.
+                Dashboard access and payments are account-only. Sign in to manage orders, wallet funds, and checkout.
               </p>
               <div className="mt-8 space-y-3">
                 {[
-                  "Fast order management",
-                  "Secure frontend payment flow",
-                  "Dashboard and wallet access",
+                  "Dashboard is only available to account holders",
+                  "Orders require an account before checkout",
+                  "Google or email sign-in supported",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-3 text-sm text-slate-600">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -59,6 +72,21 @@ const Login = () => {
                     <p className="text-sm uppercase tracking-[0.2em] text-slate-400">Welcome back</p>
                     <p className="text-lg font-semibold text-[#111827]">Sign in</p>
                   </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 w-full rounded-xl border-slate-200 bg-white text-[#111827] hover:bg-slate-50"
+                  onClick={handleGoogle}
+                >
+                  Continue with Google
+                </Button>
+
+                <div className="my-5 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-slate-200" />
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">or</span>
+                  <div className="h-px flex-1 bg-slate-200" />
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
@@ -90,9 +118,9 @@ const Login = () => {
                 </form>
 
                 <p className="mt-6 text-center text-sm text-slate-500">
-                  New here?{" "}
-                  <Link to="/register" className="font-semibold text-[#2563EB] hover:underline">
-                    Create an account
+                  Need an account first?{" "}
+                  <Link to={`/register?redirect=${encodeURIComponent(redirect)}`} className="font-semibold text-[#2563EB] hover:underline">
+                    Create one
                   </Link>
                 </p>
               </CardContent>

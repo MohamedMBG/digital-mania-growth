@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
@@ -18,12 +19,12 @@ import {
   RefreshCcw,
   Shield,
   Sparkles,
-  TrendingUp,
 } from "lucide-react";
 
 const ServiceDetails = () => {
   const { id } = useParams();
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
   const service = services.find((item) => item.id === id);
   const [link, setLink] = useState("");
   const [quantity, setQuantity] = useState(1000);
@@ -54,9 +55,20 @@ const ServiceDetails = () => {
   }
 
   const totalPrice = ((clampedQuantity / 1000) * service.pricePerK).toFixed(2);
-  const relatedServices = services.filter((item) => item.platform === service.platform && item.id !== service.id).slice(0, 3);
+  const relatedServices = services
+    .filter((item) => item.platform === service.platform && item.id !== service.id)
+    .slice(0, 3);
+  const checkoutHref = isAuthenticated ? "/order" : "/register?redirect=%2Forder";
 
   const handleOrder = () => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Create an account first",
+        description: "Open your account with Google or email and password before placing an order.",
+      });
+      return;
+    }
+
     if (!link.trim()) {
       toast({
         title: "Link required",
@@ -222,10 +234,7 @@ const ServiceDetails = () => {
                         <div
                           className="h-2 rounded-full bg-[linear-gradient(135deg,#2563EB,#7C3AED)]"
                           style={{
-                            width: `${Math.max(
-                              12,
-                              (clampedQuantity / service.maxOrder) * 100
-                            )}%`,
+                            width: `${Math.max(12, (clampedQuantity / service.maxOrder) * 100)}%`,
                           }}
                         />
                       </div>
@@ -244,12 +253,12 @@ const ServiceDetails = () => {
                       ))}
                     </div>
 
-                    <Link to="/order" className="block">
+                    <Link to={checkoutHref} className="block">
                       <Button
                         className="h-12 w-full rounded-xl border-0 bg-[#2563EB] text-white shadow-[0_18px_45px_rgba(37,99,235,0.24)] hover:bg-[#1d4ed8]"
                         onClick={handleOrder}
                       >
-                        Continue to Order
+                        {isAuthenticated ? "Continue to Order" : "Create Account to Order"}
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </Link>

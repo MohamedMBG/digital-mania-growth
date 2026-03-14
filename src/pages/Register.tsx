@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -8,17 +8,30 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 import { CheckCircle2, Sparkles } from "lucide-react";
 
 const Register = () => {
   const { toast } = useToast();
+  const { register, loginWithGoogle } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirect = searchParams.get("redirect") || "/dashboard";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    toast({ title: "Account created", description: "Your frontend workspace is ready." });
+    register(name, email, password);
+    toast({ title: "Account created", description: "Your account is ready. You can continue now." });
+    navigate(redirect);
+  };
+
+  const handleGoogle = () => {
+    loginWithGoogle();
+    toast({ title: "Google account connected", description: "Your workspace is ready to use." });
+    navigate(redirect);
   };
 
   return (
@@ -30,19 +43,19 @@ const Register = () => {
           <div className="grid gap-8 lg:grid-cols-[0.95fr_0.85fr] lg:items-center">
             <div className="max-w-xl">
               <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-4 py-1.5 text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                Create workspace
+                Create account
               </Badge>
               <h1 className="mt-6 text-4xl font-semibold tracking-[-0.04em] md:text-5xl">
-                Start with a platform designed for speed and clarity
+                Create an account before placing an order
               </h1>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                Create your account to access services, wallet funding, and a cleaner campaign workflow.
+                Orders and dashboard access are reserved for platform members. Open an account with Google or email and password to continue.
               </p>
               <div className="mt-8 space-y-3">
                 {[
-                  "Minimal onboarding",
-                  "Frontend payment experience included",
-                  "Ready-to-use dashboard workflow",
+                  "Required before checkout",
+                  "Google sign-up available",
+                  "Dashboard unlocked after registration",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-3 text-sm text-slate-600">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -60,8 +73,23 @@ const Register = () => {
                   </div>
                   <div>
                     <p className="text-sm uppercase tracking-[0.2em] text-slate-400">Get started</p>
-                    <p className="text-lg font-semibold text-[#111827]">Create account</p>
+                    <p className="text-lg font-semibold text-[#111827]">Open your account</p>
                   </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 w-full rounded-xl border-slate-200 bg-white text-[#111827] hover:bg-slate-50"
+                  onClick={handleGoogle}
+                >
+                  Continue with Google
+                </Button>
+
+                <div className="my-5 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-slate-200" />
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">or</span>
+                  <div className="h-px flex-1 bg-slate-200" />
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
@@ -104,7 +132,7 @@ const Register = () => {
 
                 <p className="mt-6 text-center text-sm text-slate-500">
                   Already have an account?{" "}
-                  <Link to="/login" className="font-semibold text-[#2563EB] hover:underline">
+                  <Link to={`/login?redirect=${encodeURIComponent(redirect)}`} className="font-semibold text-[#2563EB] hover:underline">
                     Sign in
                   </Link>
                 </p>
