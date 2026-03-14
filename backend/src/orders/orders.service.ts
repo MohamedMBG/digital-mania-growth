@@ -307,6 +307,25 @@ export class OrdersService {
     }
 
     const cancelledOrder = await this.prisma.$transaction(async (tx) => {
+      const updatedOrders = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          userId,
+          status: {
+            in: cancellableStatuses,
+          },
+        },
+        data: {
+          status: OrderStatus.canceled,
+          canceledAt: new Date(),
+          remains: 0,
+        },
+      });
+
+      if (updatedOrders.count === 0) {
+        throw new BadRequestException("Order has already been canceled.");
+      }
+
       const wallet = await tx.wallet.upsert({
         where: { userId },
         update: {},
@@ -322,14 +341,13 @@ export class OrdersService {
         },
       });
 
-      const updatedOrder = await tx.order.update({
+      const updatedOrder = await tx.order.findUnique({
         where: { id: order.id },
-        data: {
-          status: OrderStatus.canceled,
-          canceledAt: new Date(),
-          remains: 0,
-        },
       });
+
+      if (!updatedOrder) {
+        throw new NotFoundException("Order not found.");
+      }
 
       await tx.walletTransaction.create({
         data: {
