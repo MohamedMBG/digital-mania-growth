@@ -1,7 +1,7 @@
-import { ConsoleLogger, Injectable, Scope } from "@nestjs/common";
+import { ConsoleLogger, Injectable } from "@nestjs/common";
 import * as pino from "pino";
 
-@Injectable({ scope: Scope.TRANSIENT })
+@Injectable()
 export class AppLogger extends ConsoleLogger {
   private readonly stream = pino({
     level: process.env.LOG_LEVEL ?? "debug",

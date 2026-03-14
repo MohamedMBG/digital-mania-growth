@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import Header from "@/components/Header";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
-import { useToast } from "@/hooks/use-toast";
+import { toast as showToast } from "@/hooks/use-toast";
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, RefreshCcw, Shield, Sparkles } from "lucide-react";
 import { apiRequest, getApiErrorMessage } from "@/lib/api";
 
@@ -33,8 +33,8 @@ const DRAFT_KEY = "nexora-order-draft";
 const ServiceDetails = () => {
   const { id = "" } = useParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { isAuthenticated } = useAuth();
+  const loadedServiceIdRef = useRef<string | null>(null);
   const [service, setService] = useState<ServiceDetailsData | null>(() => {
     const fallback = fallbackServices.find((item) => item.id === id);
     if (!fallback) return null;
@@ -48,25 +48,40 @@ const ServiceDetails = () => {
   const [quantity, setQuantity] = useState(1000);
 
   useEffect(() => {
+    if (!id || loadedServiceIdRef.current === id) {
+      return;
+    }
+
+    loadedServiceIdRef.current = id;
+    let isActive = true;
+
     const loadService = async () => {
       try {
         const response = await apiRequest<{ data: ServiceDetailsData }>(`/services/${id}`);
-        setService(response.data);
-      } catch (error) {
-        if (!service) {
-          toast({
-            title: "Service unavailable",
-            description: getApiErrorMessage(error),
-            variant: "destructive",
-          });
+        if (isActive) {
+          setService(response.data);
         }
+      } catch (error) {
+        loadedServiceIdRef.current = null;
+
+        if (!isActive) {
+          return;
+        }
+
+        showToast({
+          title: "Service unavailable",
+          description: getApiErrorMessage(error),
+          variant: "destructive",
+        });
       }
     };
 
-    if (id) {
-      void loadService();
-    }
-  }, [id, service, toast]);
+    void loadService();
+
+    return () => {
+      isActive = false;
+    };
+  }, [id]);
 
   const clampedQuantity = useMemo(() => {
     if (!service) return 0;
@@ -100,7 +115,7 @@ const ServiceDetails = () => {
 
   const handleOrder = () => {
     if (!link.trim()) {
-      toast({
+      showToast({
         title: "Link required",
         description: "Add the destination URL before continuing to checkout.",
         variant: "destructive",
@@ -118,7 +133,7 @@ const ServiceDetails = () => {
     );
 
     if (!isAuthenticated) {
-      toast({
+      showToast({
         title: "Create an account first",
         description: "Open your account before placing an order.",
       });
