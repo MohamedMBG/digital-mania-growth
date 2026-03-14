@@ -31,6 +31,10 @@ export default () => ({
     checkoutCancelUrl:
       process.env.STRIPE_CHECKOUT_CANCEL_URL ?? "http://localhost:8080/wallet/cancel",
   },
+  provider: {
+    url: process.env.PROVIDER_URL,
+    apiKey: process.env.PROVIDER_API_KEY,
+  },
   queue: {
     prefix: process.env.BULLMQ_PREFIX ?? "nexora",
   },

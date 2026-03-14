@@ -10,6 +10,7 @@ import { OrdersModule } from "./orders/orders.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { PaymentsModule } from "./payments/payments.module";
 import { PlatformsModule } from "./platforms/platforms.module";
+import { ProviderModule } from "./provider/provider.module";
 import { ServicesModule } from "./services/services.module";
 import { UsersModule } from "./users/users.module";
 import { WalletModule } from "./wallet/wallet.module";
@@ -29,6 +30,7 @@ import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
     AuthModule,
     PaymentsModule,
     OrdersModule,
+    ProviderModule,
     PlatformsModule,
     CategoriesModule,
     ServicesModule,

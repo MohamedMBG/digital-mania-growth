@@ -30,6 +30,8 @@ import appConfig from "./configuration";
         STRIPE_CURRENCY: Joi.string().length(3).default("USD"),
         STRIPE_CHECKOUT_SUCCESS_URL: Joi.string().uri().required(),
         STRIPE_CHECKOUT_CANCEL_URL: Joi.string().uri().required(),
+        PROVIDER_URL: Joi.string().uri().required(),
+        PROVIDER_API_KEY: Joi.string().required(),
         LOG_LEVEL: Joi.string().valid("fatal", "error", "warn", "log", "debug", "verbose").default("debug"),
         BULLMQ_PREFIX: Joi.string().default("nexora"),
       }),
