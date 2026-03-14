@@ -1,5 +1,8 @@
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useEffect } from "react";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import { Button } from "@/components/ui/button";
 
 const NotFound = () => {
   const location = useLocation();
@@ -9,14 +12,28 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">404</h1>
-        <p className="mb-4 text-xl text-muted-foreground">Oops! Page not found</p>
-        <a href="/" className="text-primary underline hover:text-primary/90">
-          Return to Home
-        </a>
-      </div>
+    <div className="min-h-screen bg-white text-[#111827]">
+      <Header />
+      <section className="py-24">
+        <div className="container text-center">
+          <p className="text-sm uppercase tracking-[0.22em] text-slate-400">404</p>
+          <h1 className="mt-4 text-5xl font-semibold tracking-[-0.05em] md:text-6xl">Page not found</h1>
+          <p className="mx-auto mt-5 max-w-xl text-lg leading-8 text-slate-600">
+            The page you requested does not exist in this frontend workspace. Head back to the main flow and continue exploring the platform.
+          </p>
+          <div className="mt-8 flex justify-center gap-3">
+            <Link to="/">
+              <Button className="rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8]">Go Home</Button>
+            </Link>
+            <Link to="/services">
+              <Button variant="outline" className="rounded-xl border-slate-200 bg-white text-[#111827] hover:bg-slate-50">
+                Browse Services
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+      <Footer />
     </div>
   );
 };

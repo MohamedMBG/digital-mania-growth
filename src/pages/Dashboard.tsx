@@ -179,7 +179,7 @@ const Dashboard = () => {
                       <div key={card.id} className="rounded-[1.25rem] border border-slate-200 bg-[#F8FAFC] p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="font-semibold text-[#111827]">{card.brand} •••• {card.last4}</p>
+                            <p className="font-semibold text-[#111827]">{card.brand} **** {card.last4}</p>
                             <p className="mt-1 text-sm text-slate-500">{card.holder}</p>
                           </div>
                           <p className="text-sm text-slate-400">{card.expires}</p>

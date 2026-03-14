@@ -230,7 +230,7 @@ const Order = () => {
                                 <p className="font-semibold text-[#111827]">{card.brand}</p>
                                 <p className="text-xs text-slate-400">{card.expires}</p>
                               </div>
-                              <p className="mt-6 text-lg font-semibold tracking-[0.18em] text-[#111827]">•••• {card.last4}</p>
+                              <p className="mt-6 text-lg font-semibold tracking-[0.18em] text-[#111827]">**** {card.last4}</p>
                               <p className="mt-3 text-sm text-slate-500">{card.holder}</p>
                             </button>
                           );
