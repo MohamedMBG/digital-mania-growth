@@ -8,7 +8,11 @@ import { InjectQueue } from "@nestjs/bullmq";
 import { OrderStatus, Prisma, WalletTransactionType } from "@prisma/client";
 import { Queue } from "bullmq";
 import { PrismaService } from "src/prisma/prisma.service";
-import { PROVIDER_ORDER_QUEUE } from "./orders.constants";
+import {
+  ORDER_STATUS_UPDATE_QUEUE,
+  ORDER_SUBMIT_JOB,
+  ORDER_SUBMIT_QUEUE,
+} from "./orders.constants";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { ListOrdersQueryDto } from "./dto/list-orders-query.dto";
 
@@ -16,7 +20,8 @@ import { ListOrdersQueryDto } from "./dto/list-orders-query.dto";
 export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
-    @InjectQueue(PROVIDER_ORDER_QUEUE) private readonly providerOrderQueue: Queue
+    @InjectQueue(ORDER_SUBMIT_QUEUE) private readonly orderSubmitQueue: Queue,
+    @InjectQueue(ORDER_STATUS_UPDATE_QUEUE) private readonly orderStatusQueue: Queue
   ) {}
 
   async createOrder(userId: string, dto: CreateOrderDto) {
@@ -149,8 +154,8 @@ export class OrdersService {
     });
 
     try {
-      await this.providerOrderQueue.add(
-        "submit-provider-order",
+      await this.orderSubmitQueue.add(
+        ORDER_SUBMIT_JOB,
         {
           orderId: createdOrder.id,
           userId,
@@ -159,6 +164,11 @@ export class OrdersService {
         },
         {
           jobId: createdOrder.id,
+          attempts: 5,
+          backoff: {
+            type: "exponential",
+            delay: 5_000,
+          },
         }
       );
 
@@ -349,7 +359,8 @@ export class OrdersService {
       return updatedOrder;
     });
 
-    await this.providerOrderQueue.remove(order.id).catch(() => undefined);
+    await this.orderSubmitQueue.remove(order.id).catch(() => undefined);
+    await this.removeQueuedStatusJobs(order.id);
 
     return this.getOrderById(userId, cancelledOrder.id, "Order canceled successfully.");
   }
@@ -420,6 +431,21 @@ export class OrdersService {
 
   private calculateOrderCharge(quantity: number, pricePerK: number) {
     return Number(((quantity / 1000) * pricePerK).toFixed(2));
+  }
+
+  private async removeQueuedStatusJobs(orderId: string) {
+    const jobs = await this.orderStatusQueue.getJobs([
+      "waiting",
+      "delayed",
+      "prioritized",
+      "paused",
+    ]);
+
+    await Promise.all(
+      jobs
+        .filter((job) => job.data?.orderId === orderId)
+        .map((job) => job.remove().catch(() => undefined))
+    );
   }
 
   private parseOrderStatus(status?: string): OrderStatus | undefined {
