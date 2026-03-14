@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import BrandLogo from "@/components/BrandLogo";
 
 const footerLinks = [
   {
@@ -37,14 +38,8 @@ const Footer = () => {
       <div className="container py-16">
         <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]">
           <div className="max-w-md">
-            <Link to="/" className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#2563EB,#7C3AED)] shadow-[0_12px_28px_rgba(37,99,235,0.18)]">
-                <span className="text-sm font-bold text-white">D</span>
-              </div>
-              <div>
-                <p className="text-lg font-semibold tracking-[-0.03em] text-[#111827]">Digital Mania</p>
-                <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Modern SMM workflow</p>
-              </div>
+            <Link to="/" className="inline-flex items-center">
+              <BrandLogo />
             </Link>
 
             <p className="mt-5 text-sm leading-7 text-slate-600">
@@ -83,9 +78,9 @@ const Footer = () => {
         </div>
 
         <div className="mt-12 flex flex-col gap-4 border-t border-slate-200 pt-6 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
-          <p>© 2026 Digital Mania. Frontend concept experience.</p>
+          <p>© 2026 NEXORA. Frontend concept experience.</p>
           <div className="flex flex-wrap items-center gap-5">
-            <span>Stripe-style workflow</span>
+            <span>Premium workflow</span>
             <span>Luxury minimal UI</span>
             <span>Payments ready</span>
           </div>

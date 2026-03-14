@@ -200,7 +200,7 @@ export const testimonials = [
   {
     name: "Sarah M.",
     role: "Content Creator",
-    text: "Digital Mania completely transformed my Instagram. Gained 10k followers in a week, and they're all real, active accounts. Best investment for my brand.",
+    text: "NEXORA completely transformed my Instagram. Gained 10k followers in a week, and they're all real, active accounts. Best investment for my brand.",
     rating: 5,
   },
   {
@@ -212,7 +212,7 @@ export const testimonials = [
   {
     name: "Emily R.",
     role: "E-commerce Owner",
-    text: "We use Digital Mania for all our social media growth. Reliable, fast, and the support team is incredible. Orders delivered within hours every time.",
+    text: "We use NEXORA for all our social media growth. Reliable, fast, and the support team is incredible. Orders delivered within hours every time.",
     rating: 5,
   },
   {

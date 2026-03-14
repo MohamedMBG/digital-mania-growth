@@ -23,7 +23,7 @@ const Login = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     login(email, password);
-    toast({ title: "Signed in", description: "Welcome back to Digital Mania." });
+    toast({ title: "Signed in", description: "Welcome back to NEXORA." });
     navigate(redirect);
   };
 
