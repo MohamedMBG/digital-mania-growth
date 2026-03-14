@@ -28,6 +28,68 @@ model User {
   walletTransactions WalletTransaction[]
 }
 
+model Platform {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  icon        String?
+  sortOrder   Int        @default(0)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  categories  Category[]
+  services    Service[]
+
+  @@index([isActive, sortOrder])
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  platformId  String
+  name        String
+  slug        String
+  description String?
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  platform    Platform  @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  services    Service[]
+
+  @@unique([platformId, slug])
+  @@index([platformId, isActive, sortOrder])
+}
+
+model Service {
+  id            String    @id @default(cuid())
+  platformId    String
+  categoryId    String
+  name          String
+  slug          String    @unique
+  description   String
+  shortDescription String?
+  pricePerK     Decimal   @db.Decimal(12, 2)
+  minOrder      Int
+  maxOrder      Int
+  deliverySpeed String?
+  guarantee     String?
+  refillPolicy  String?
+  isFeatured    Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  platform      Platform  @relation(fields: [platformId], references: [id], onDelete: Restrict)
+  category      Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([platformId, categoryId, isActive, sortOrder])
+  @@index([isFeatured, isActive, sortOrder])
+}
+
 model WalletTransaction {
   id          String   @id @default(cuid())
   userId      String
