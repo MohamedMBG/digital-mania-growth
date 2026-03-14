@@ -25,6 +25,11 @@ export default () => ({
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    currency: (process.env.STRIPE_CURRENCY ?? "USD").toLowerCase(),
+    checkoutSuccessUrl:
+      process.env.STRIPE_CHECKOUT_SUCCESS_URL ?? "http://localhost:8080/wallet/success",
+    checkoutCancelUrl:
+      process.env.STRIPE_CHECKOUT_CANCEL_URL ?? "http://localhost:8080/wallet/cancel",
   },
   queue: {
     prefix: process.env.BULLMQ_PREFIX ?? "nexora",
