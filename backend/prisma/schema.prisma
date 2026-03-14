@@ -7,13 +7,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  customer
+  admin
+  support
+}
+
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String?
-  provider     String   @default("email")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(cuid())
+  email            String   @unique
+  fullName         String?
+  passwordHash     String?
+  refreshTokenHash String?
+  provider         String   @default("email")
+  role             UserRole @default(customer)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  walletTransactions WalletTransaction[]
 }
 
 model WalletTransaction {
@@ -26,6 +38,8 @@ model WalletTransaction {
   status      String   @default("pending")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model QueueJobLog {
