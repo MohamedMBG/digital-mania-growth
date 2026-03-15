@@ -4,16 +4,16 @@ import BrandLogo from "@/components/BrandLogo";
 
 const footerLinks = [
   {
-    title: "Platform",
+    title: "Services",
     links: [
-      { label: "Services", to: "/services" },
-      { label: "Order", to: "/order" },
-      { label: "Dashboard", to: "/dashboard" },
-      { label: "Payments", to: "/add-funds" },
+      { label: "Growth Solutions", to: "/services" },
+      { label: "Campaign Orders", to: "/order" },
+      { label: "Client Dashboard", to: "/dashboard" },
+      { label: "Billing & Wallet", to: "/add-funds" },
     ],
   },
   {
-    title: "Growth Channels",
+    title: "Channels",
     links: [
       { label: "Instagram", to: "/services" },
       { label: "TikTok", to: "/services" },
@@ -22,12 +22,12 @@ const footerLinks = [
     ],
   },
   {
-    title: "Company",
+    title: "Agency",
     links: [
-      { label: "About", to: "/" },
-      { label: "Security", to: "/add-funds" },
-      { label: "Support", to: "/dashboard" },
-      { label: "Status", to: "/dashboard" },
+      { label: "About Nexora", to: "/" },
+      { label: "Trust & Security", to: "/add-funds" },
+      { label: "Client Support", to: "/dashboard" },
+      { label: "Platform Status", to: "/dashboard" },
     ],
   },
 ];
@@ -43,25 +43,31 @@ const Footer = () => {
             </Link>
 
             <p className="mt-5 text-sm leading-7 text-slate-600">
-              A premium frontend-first SMM platform for discovering services, placing orders quickly, managing wallet funds, and checking campaign performance in one clean flow.
+              Nexora is a digital growth agency focused on premium social media
+              campaigns, streamlined client delivery, and dependable account support
+              for brands, creators, and modern businesses.
             </p>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              {["Secure checkout", "Instant funding", "Fast ordering"].map((item) => (
-                <Badge
-                  key={item}
-                  variant="outline"
-                  className="rounded-full border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600"
-                >
-                  {item}
-                </Badge>
-              ))}
+              {["Agency-grade support", "Secure billing", "Reliable delivery"].map(
+                (item) => (
+                  <Badge
+                    key={item}
+                    variant="outline"
+                    className="rounded-full border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600"
+                  >
+                    {item}
+                  </Badge>
+                )
+              )}
             </div>
           </div>
 
           {footerLinks.map((group) => (
             <div key={group.title}>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">{group.title}</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
+                {group.title}
+              </p>
               <div className="mt-4 flex flex-col gap-3">
                 {group.links.map((link) => (
                   <Link
@@ -78,11 +84,11 @@ const Footer = () => {
         </div>
 
         <div className="mt-12 flex flex-col gap-4 border-t border-slate-200 pt-6 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
-          <p>© 2026 NEXORA. Frontend concept experience.</p>
+          <p>&copy; 2026 NEXORA. Strategic growth services for modern brands.</p>
           <div className="flex flex-wrap items-center gap-5">
-            <span>Premium workflow</span>
-            <span>Luxury minimal UI</span>
-            <span>Payments ready</span>
+            <span>Campaign strategy</span>
+            <span>Trusted execution</span>
+            <span>Professional support</span>
           </div>
         </div>
       </div>
