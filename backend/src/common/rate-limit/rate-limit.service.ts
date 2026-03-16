@@ -1,41 +1,30 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
+import Redis from "ioredis";
+import { REDIS_CONNECTION } from "src/infrastructure/redis/redis.constants";
 
-type RateLimitRecord = {
+type RateLimitResult = {
   count: number;
   resetAt: number;
 };
 
 @Injectable()
 export class RateLimitService {
-  private readonly records = new Map<string, RateLimitRecord>();
+  constructor(@Inject(REDIS_CONNECTION) private readonly redis: Redis) {}
 
-  consume(key: string, windowMs: number) {
-    const now = Date.now();
-    const current = this.records.get(key);
+  async consume(key: string, windowMs: number): Promise<RateLimitResult> {
+    const namespacedKey = `rate-limit:${key}`;
+    const count = await this.redis.incr(namespacedKey);
 
-    if (!current || current.resetAt <= now) {
-      const nextRecord = {
-        count: 1,
-        resetAt: now + windowMs,
-      };
-
-      this.records.set(key, nextRecord);
-      this.pruneExpired(now);
-
-      return nextRecord;
+    if (count === 1) {
+      await this.redis.pexpire(namespacedKey, windowMs);
     }
 
-    current.count += 1;
-    this.records.set(key, current);
+    const ttl = await this.redis.pttl(namespacedKey);
+    const safeTtl = ttl > 0 ? ttl : windowMs;
 
-    return current;
-  }
-
-  private pruneExpired(now: number) {
-    for (const [key, record] of this.records.entries()) {
-      if (record.resetAt <= now) {
-        this.records.delete(key);
-      }
-    }
+    return {
+      count,
+      resetAt: Date.now() + safeTtl,
+    };
   }
 }

@@ -25,7 +25,7 @@ export class RateLimitGuard implements CanActivate {
     private readonly rateLimitService: RateLimitService
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const options = this.reflector.getAllAndOverride<RateLimitOptions>(
       RATE_LIMIT_OPTIONS,
       [context.getHandler(), context.getClass()]
@@ -39,7 +39,7 @@ export class RateLimitGuard implements CanActivate {
     const request = http.getRequest<RateLimitedRequest>();
     const response = http.getResponse<Response>();
     const key = this.buildKey(request, options);
-    const record = this.rateLimitService.consume(key, options.windowMs);
+    const record = await this.rateLimitService.consume(key, options.windowMs);
     const remaining = Math.max(options.maxRequests - record.count, 0);
 
     response.setHeader("X-RateLimit-Limit", String(options.maxRequests));

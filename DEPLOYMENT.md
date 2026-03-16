@@ -42,6 +42,7 @@ PROVIDER_API_KEY=your-provider-api-key
 
 LOG_LEVEL=warn
 BULLMQ_PREFIX=nexora
+CACHE_TTL_SECONDS=120
 ```
 
 Rotate every secret that has ever been committed or shared.
@@ -49,10 +50,19 @@ Rotate every secret that has ever been committed or shared.
 ## Infrastructure Checklist
 
 - Frontend host: Vercel or Netlify
-- Backend host: Render, Railway, or another Node host
+- Backend API host: Render, Railway, or another Node host
+- Background worker host: separate Node worker deployment for BullMQ processors
 - Postgres: Supabase, Neon, or managed Postgres
 - Redis: Upstash or managed Redis
 - Stripe webhook: point to `POST https://api.your-domain.com/api/payments/webhook`
+
+## Scale Notes For 50,000 Users
+
+- Run multiple API instances behind a load balancer.
+- Keep Redis shared across all API instances for distributed rate limiting and cache reads.
+- Run queue workers separately from API instances so order processing can scale independently.
+- Cache public catalog endpoints to reduce repeated Postgres load.
+- Monitor Redis memory, queue depth, webhook latency, and database connections before traffic spikes.
 
 ## Deploy Order
 

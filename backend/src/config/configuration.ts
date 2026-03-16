@@ -38,4 +38,7 @@ export default () => ({
   queue: {
     prefix: process.env.BULLMQ_PREFIX ?? "nexora",
   },
+  cache: {
+    ttlSeconds: Number(process.env.CACHE_TTL_SECONDS ?? 120),
+  },
 });
