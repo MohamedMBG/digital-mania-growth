@@ -30,16 +30,20 @@ export class PaymentsService {
       dto.currency?.toLowerCase() ??
       this.configService.getOrThrow<string>("stripe.currency");
     const amountInMinorUnit = this.toMinorUnit(dto.amount);
+    const successUrl = this.resolveCheckoutRedirectUrl(
+      dto.successUrl,
+      this.configService.getOrThrow<string>("stripe.checkoutSuccessUrl")
+    );
+    const cancelUrl = this.resolveCheckoutRedirectUrl(
+      dto.cancelUrl,
+      this.configService.getOrThrow<string>("stripe.checkoutCancelUrl")
+    );
 
     const session = await this.stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
-      success_url:
-        dto.successUrl ??
-        this.configService.getOrThrow<string>("stripe.checkoutSuccessUrl"),
-      cancel_url:
-        dto.cancelUrl ??
-        this.configService.getOrThrow<string>("stripe.checkoutCancelUrl"),
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       client_reference_id: userId,
       customer_email: undefined,
       metadata: {
@@ -271,6 +275,32 @@ export class PaymentsService {
 
   private toMinorUnit(amount: number) {
     return Math.round(amount * 100);
+  }
+
+  private resolveCheckoutRedirectUrl(
+    providedUrl: string | undefined,
+    defaultUrl: string
+  ) {
+    if (!providedUrl) {
+      return defaultUrl;
+    }
+
+    const allowedOrigins = this.configService
+      .getOrThrow<string>("app.frontendUrl")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+
+    const fallback = new URL(defaultUrl);
+    const candidate = new URL(providedUrl);
+    const exactAllowedMatch = allowedOrigins.includes(candidate.origin);
+    const sameReturnPath = candidate.pathname === fallback.pathname;
+
+    if (!exactAllowedMatch || !sameReturnPath) {
+      throw new BadRequestException("Checkout redirect URL is not allowed.");
+    }
+
+    return candidate.toString();
   }
 
   private asRecord(value: Prisma.JsonValue | null | undefined) {

@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
+import { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
 import { ConfigService } from "@nestjs/config";
 import { GlobalExceptionFilter } from "./common/filters/global-exception.filter";
@@ -16,9 +17,30 @@ async function bootstrap() {
   app.useLogger(logger);
 
   const config = app.get(ConfigService);
+  const server = app.getHttpAdapter().getInstance();
   const port = config.get<number>("app.port", 4000);
   const apiPrefix = config.get<string>("app.apiPrefix", "api");
   const frontendUrl = config.get<string>("app.frontendUrl", "http://localhost:8080");
+  const isProduction = config.get<string>("app.nodeEnv") === "production";
+
+  server.disable("x-powered-by");
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+
+    if (isProduction) {
+      res.setHeader(
+        "Strict-Transport-Security",
+        "max-age=31536000; includeSubDomains; preload"
+      );
+    }
+
+    next();
+  });
 
   app.setGlobalPrefix(apiPrefix);
   app.enableCors({

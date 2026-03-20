@@ -34,6 +34,7 @@ import appConfig from "./configuration";
         PROVIDER_API_KEY: Joi.string().required(),
         LOG_LEVEL: Joi.string().valid("fatal", "error", "warn", "log", "debug", "verbose").default("debug"),
         BULLMQ_PREFIX: Joi.string().default("nexora"),
+        CACHE_TTL_SECONDS: Joi.number().integer().min(10).default(120),
       }),
       validationOptions: {
         abortEarly: false,

@@ -14,6 +14,8 @@ import AddFunds from "./pages/AddFunds";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
+import WalletSuccess from "./pages/WalletSuccess";
+import WalletCancel from "./pages/WalletCancel";
 
 const queryClient = new QueryClient();
 
@@ -49,6 +51,22 @@ const App = () => (
               element={
                 <RequireAuth>
                   <AddFunds />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/wallet/success"
+              element={
+                <RequireAuth>
+                  <WalletSuccess />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/wallet/cancel"
+              element={
+                <RequireAuth>
+                  <WalletCancel />
                 </RequireAuth>
               }
             />

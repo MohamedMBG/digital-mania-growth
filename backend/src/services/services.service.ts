@@ -1,75 +1,143 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { CacheService } from "src/common/cache/cache.service";
 import { PrismaService } from "src/prisma/prisma.service";
 import { ListServicesQueryDto } from "./dto/list-services-query.dto";
 
 @Injectable()
 export class ServicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cacheService: CacheService
+  ) {}
 
   async listServices(query: ListServicesQueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 12;
     const skip = (page - 1) * limit;
+    const cacheKey = [
+      "catalog:services",
+      query.platformSlug ?? "all-platforms",
+      query.categorySlug ?? "all-categories",
+      page,
+      limit,
+    ].join(":");
 
-    const where = {
-      isActive: true,
-      ...(query.platformSlug ? { platform: { slug: query.platformSlug, isActive: true } } : {}),
-      ...(query.categorySlug ? { category: { slug: query.categorySlug, isActive: true } } : {}),
-    };
+    return this.cacheService.remember(cacheKey, async () => {
+      const where = {
+        isActive: true,
+        ...(query.platformSlug
+          ? { platform: { slug: query.platformSlug, isActive: true } }
+          : {}),
+        ...(query.categorySlug
+          ? { category: { slug: query.categorySlug, isActive: true } }
+          : {}),
+      };
 
-    const [items, total] = await Promise.all([
-      this.prisma.service.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
-        include: {
-          platform: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              icon: true,
+      const [items, total] = await Promise.all([
+        this.prisma.service.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+          include: {
+            platform: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                icon: true,
+              },
+            },
+            category: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+              },
             },
           },
-          category: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-            },
-          },
-        },
-      }),
-      this.prisma.service.count({ where }),
-    ]);
+        }),
+        this.prisma.service.count({ where }),
+      ]);
 
-    return {
-      success: true,
-      message: "Services loaded successfully.",
-      data: items.map((service) => this.serializeService(service)),
-      meta: this.buildPaginationMeta(page, limit, total),
-    };
+      return {
+        success: true,
+        message: "Services loaded successfully.",
+        data: items.map((service) => this.serializeService(service)),
+        meta: this.buildPaginationMeta(page, limit, total),
+      };
+    });
   }
 
   async listFeaturedServices(query: ListServicesQueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 12;
     const skip = (page - 1) * limit;
+    const cacheKey = [
+      "catalog:featured-services",
+      query.platformSlug ?? "all-platforms",
+      query.categorySlug ?? "all-categories",
+      page,
+      limit,
+    ].join(":");
 
-    const where = {
-      isActive: true,
-      isFeatured: true,
-      ...(query.platformSlug ? { platform: { slug: query.platformSlug, isActive: true } } : {}),
-      ...(query.categorySlug ? { category: { slug: query.categorySlug, isActive: true } } : {}),
-    };
+    return this.cacheService.remember(cacheKey, async () => {
+      const where = {
+        isActive: true,
+        isFeatured: true,
+        ...(query.platformSlug
+          ? { platform: { slug: query.platformSlug, isActive: true } }
+          : {}),
+        ...(query.categorySlug
+          ? { category: { slug: query.categorySlug, isActive: true } }
+          : {}),
+      };
 
-    const [items, total] = await Promise.all([
-      this.prisma.service.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+      const [items, total] = await Promise.all([
+        this.prisma.service.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+          include: {
+            platform: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                icon: true,
+              },
+            },
+            category: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+              },
+            },
+          },
+        }),
+        this.prisma.service.count({ where }),
+      ]);
+
+      return {
+        success: true,
+        message: "Featured services loaded successfully.",
+        data: items.map((service) => this.serializeService(service)),
+        meta: this.buildPaginationMeta(page, limit, total),
+      };
+    });
+  }
+
+  async getServiceBySlug(slugOrId: string) {
+    return this.cacheService.remember(`catalog:service:${slugOrId}`, async () => {
+      const service = await this.prisma.service.findFirst({
+        where: {
+          OR: [{ slug: slugOrId }, { id: slugOrId }],
+          isActive: true,
+          platform: { isActive: true },
+          category: { isActive: true },
+        },
         include: {
           platform: {
             select: {
@@ -77,6 +145,7 @@ export class ServicesService {
               name: true,
               slug: true,
               icon: true,
+              description: true,
             },
           },
           category: {
@@ -84,59 +153,22 @@ export class ServicesService {
               id: true,
               name: true,
               slug: true,
+              description: true,
             },
           },
         },
-      }),
-      this.prisma.service.count({ where }),
-    ]);
+      });
 
-    return {
-      success: true,
-      message: "Featured services loaded successfully.",
-      data: items.map((service) => this.serializeService(service)),
-      meta: this.buildPaginationMeta(page, limit, total),
-    };
-  }
+      if (!service) {
+        throw new NotFoundException("Service not found.");
+      }
 
-  async getServiceBySlug(slugOrId: string) {
-    const service = await this.prisma.service.findFirst({
-      where: {
-        OR: [{ slug: slugOrId }, { id: slugOrId }],
-        isActive: true,
-        platform: { isActive: true },
-        category: { isActive: true },
-      },
-      include: {
-        platform: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            icon: true,
-            description: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            description: true,
-          },
-        },
-      },
+      return {
+        success: true,
+        message: "Service loaded successfully.",
+        data: this.serializeService(service),
+      };
     });
-
-    if (!service) {
-      throw new NotFoundException("Service not found.");
-    }
-
-    return {
-      success: true,
-      message: "Service loaded successfully.",
-      data: this.serializeService(service),
-    };
   }
 
   private serializeService(service: {
