@@ -10,7 +10,6 @@ The Nexora database is built using PostgreSQL and managed exclusively via **Pris
 erDiagram
     USER ||--o{ WALLET : "has one"
     USER ||--o{ ORDER : "places"
-    USER ||--o{ TICKET : "creates"
     USER ||--o{ ADMIN_ACTION_LOG : "performs"
     WALLET ||--o{ WALLET_TRANSACTION : "contains"
     WALLET ||--o{ PAYMENT : "receives"
@@ -19,7 +18,6 @@ erDiagram
     CATEGORY ||--o{ SERVICE : "categorizes"
     SERVICE ||--o{ ORDER : "fulfilled via"
     ORDER ||--o{ ORDER_STATUS_LOG : "transitions"
-    TICKET ||--o{ TICKET_MESSAGE : "contains"
 
     USER {
         string id PK
@@ -67,7 +65,6 @@ erDiagram
 ### 2.3 Order Execution & Support
 - **Order:** Tracks an active purchase. Encompasses target URLs, quantities, costs, and current state.
 - **OrderStatusLog:** An append-only historical log of the Order as it transverses states (`pending` -> `queued` -> `processing` -> `completed`).
-- **Ticket / TicketMessage:** Built-in isolated support tables linking Users directly to staff.
 
 ### 2.4 System Operations
 - **QueueJobLog:** Internal tracing for executed BullMQ tasks, particularly external API invocations.

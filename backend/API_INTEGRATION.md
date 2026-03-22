@@ -559,56 +559,6 @@ Response:
 
 `PATCH /orders/:id/cancel`
 
-## Tickets API
-
-### Create Ticket
-
-`POST /tickets`
-
-Headers:
-
-```text
-Authorization: Bearer <accessToken>
-```
-
-Request:
-
-```json
-{
-  "subject": "Order delay",
-  "message": "My order is still pending."
-}
-```
-
-### List Tickets
-
-`GET /tickets?page=1&limit=20&status=open`
-
-Behavior:
-
-- customers only see their own tickets
-- admin and support can see all tickets
-
-### Ticket Details
-
-`GET /tickets/:id`
-
-### Reply To Ticket
-
-`POST /tickets/:id/messages`
-
-Request:
-
-```json
-{
-  "message": "Any update on this ticket?"
-}
-```
-
-### Close Ticket
-
-`PATCH /tickets/:id/close`
-
 ## Admin API
 
 All admin endpoints require:
@@ -712,7 +662,6 @@ A clean frontend service split would look like this:
 - `walletApi.ts`
 - `paymentsApi.ts`
 - `ordersApi.ts`
-- `ticketsApi.ts`
 - `adminApi.ts`
 
 Example:
@@ -754,5 +703,4 @@ Relevant backend files:
 - [wallet.controller.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/wallet/wallet.controller.ts)
 - [payments.controller.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/payments/payments.controller.ts)
 - [orders.controller.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/orders/orders.controller.ts)
-- [tickets.controller.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/tickets/tickets.controller.ts)
 - [admin.controller.ts](C:/Users/pc/projectw/digital-mania-growth/backend/src/admin/admin.controller.ts)
