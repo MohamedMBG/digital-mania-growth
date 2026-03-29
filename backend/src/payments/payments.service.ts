@@ -218,32 +218,19 @@ export class PaymentsService {
         return;
       }
 
-      const wallet = await tx.wallet.findUnique({
-        where: { id: payment.walletId },
-      });
+      const wallet = await this.walletService.getWalletRecordById(payment.walletId, tx);
 
       if (!wallet) {
         throw new NotFoundException("Wallet not found for payment.");
       }
 
-      const updatedWallet = await tx.wallet.update({
-        where: { id: wallet.id },
-        data: {
-          balance: {
-            increment: payment.amount,
-          },
-        },
-      });
-
-      await tx.walletTransaction.create({
-        data: {
-          walletId: wallet.id,
+      await this.walletService.creditWallet(
+        {
+          userId: wallet.userId,
+          amount: payment.amount.toNumber(),
+          currency: payment.currency,
           providerRef: session.id,
           reference: payment.id,
-          amount: payment.amount,
-          balanceBefore: wallet.balance,
-          balanceAfter: updatedWallet.balance,
-          currency: payment.currency,
           type: WalletTransactionType.deposit,
           description: "Wallet top-up credited from verified Stripe payment",
           metadata: {
@@ -252,9 +239,9 @@ export class PaymentsService {
             paymentIntentId:
               typeof session.payment_intent === "string" ? session.payment_intent : null,
           },
-          status: "completed",
         },
-      });
+        tx
+      );
     });
   }
 

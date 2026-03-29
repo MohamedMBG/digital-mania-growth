@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { Prisma, WalletTransactionType } from "@prisma/client";
+import { buildPaginationMeta } from "src/common/utils/pagination";
 import { PrismaService } from "src/prisma/prisma.service";
 import { WalletTransactionsQueryDto } from "./dto/wallet-transactions-query.dto";
 import { WalletOperationInput } from "./wallet.types";
@@ -12,11 +13,23 @@ import { WalletOperationInput } from "./wallet.types";
 export class WalletService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async ensureWalletForUser(userId: string) {
-    return this.prisma.wallet.upsert({
+  async ensureWalletForUser(
+    userId: string,
+    tx?: Prisma.TransactionClient
+  ) {
+    const client = tx ?? this.prisma;
+
+    return client.wallet.upsert({
       where: { userId },
       update: {},
       create: { userId },
+    });
+  }
+
+  async getWalletRecordById(walletId: string, tx?: Prisma.TransactionClient) {
+    const client = tx ?? this.prisma;
+    return client.wallet.findUnique({
+      where: { id: walletId },
     });
   }
 
@@ -93,23 +106,19 @@ export class WalletService {
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       })),
-      meta: this.buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
-  async creditWallet(input: WalletOperationInput) {
+  async creditWallet(input: WalletOperationInput, tx?: Prisma.TransactionClient) {
     this.assertPositiveAmount(input.amount);
 
     const amount = new Prisma.Decimal(input.amount.toFixed(2));
 
-    return this.prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.upsert({
-        where: { userId: input.userId },
-        update: {},
-        create: { userId: input.userId },
-      });
+    return this.withTransaction(tx, async (client) => {
+      const wallet = await this.ensureWalletForUser(input.userId, client);
 
-      const updatedWallet = await tx.wallet.update({
+      const updatedWallet = await client.wallet.update({
         where: { id: wallet.id },
         data: {
           balance: {
@@ -118,7 +127,7 @@ export class WalletService {
         },
       });
 
-      const transaction = await tx.walletTransaction.create({
+      const transaction = await client.walletTransaction.create({
         data: {
           walletId: wallet.id,
           providerRef: input.providerRef,
@@ -126,7 +135,7 @@ export class WalletService {
           amount,
           balanceBefore: wallet.balance,
           balanceAfter: updatedWallet.balance,
-          currency: wallet.currency,
+          currency: input.currency ?? wallet.currency,
           type: input.type,
           description: input.description,
           metadata: input.metadata as Prisma.InputJsonValue | undefined,
@@ -137,19 +146,15 @@ export class WalletService {
     });
   }
 
-  async deductWallet(input: WalletOperationInput) {
+  async deductWallet(input: WalletOperationInput, tx?: Prisma.TransactionClient) {
     this.assertPositiveAmount(input.amount);
 
     const amount = new Prisma.Decimal(input.amount.toFixed(2));
 
-    return this.prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.upsert({
-        where: { userId: input.userId },
-        update: {},
-        create: { userId: input.userId },
-      });
+    return this.withTransaction(tx, async (client) => {
+      const wallet = await this.ensureWalletForUser(input.userId, client);
 
-      const updatedRows = await tx.wallet.updateMany({
+      const updatedRows = await client.wallet.updateMany({
         where: {
           id: wallet.id,
           balance: {
@@ -167,7 +172,7 @@ export class WalletService {
         throw new BadRequestException("Insufficient wallet balance.");
       }
 
-      const updatedWallet = await tx.wallet.findUnique({
+      const updatedWallet = await client.wallet.findUnique({
         where: { id: wallet.id },
       });
 
@@ -175,7 +180,7 @@ export class WalletService {
         throw new NotFoundException("Wallet not found.");
       }
 
-      const transaction = await tx.walletTransaction.create({
+      const transaction = await client.walletTransaction.create({
         data: {
           walletId: wallet.id,
           providerRef: input.providerRef,
@@ -183,7 +188,7 @@ export class WalletService {
           amount,
           balanceBefore: wallet.balance,
           balanceAfter: updatedWallet.balance,
-          currency: wallet.currency,
+          currency: input.currency ?? wallet.currency,
           type: input.type,
           description: input.description,
           metadata: input.metadata as Prisma.InputJsonValue | undefined,
@@ -212,14 +217,14 @@ export class WalletService {
     throw new BadRequestException("Invalid wallet transaction type.");
   }
 
-  private buildPaginationMeta(page: number, limit: number, total: number) {
-    return {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-      hasNextPage: page * limit < total,
-      hasPreviousPage: page > 1,
-    };
+  private withTransaction<T>(
+    tx: Prisma.TransactionClient | undefined,
+    operation: (client: Prisma.TransactionClient) => Promise<T>
+  ) {
+    if (tx) {
+      return operation(tx);
+    }
+
+    return this.prisma.$transaction(operation);
   }
 }

@@ -38,7 +38,10 @@ export class OrdersSubmitProcessor extends WorkerHost {
       throw new NotFoundException("Queued order not found.");
     }
 
-    if (order.status !== OrderStatus.queued || !order.providerServiceId) {
+    const isQueueableOrderStatus =
+      order.status === OrderStatus.pending || order.status === OrderStatus.queued;
+
+    if (!isQueueableOrderStatus || !order.providerServiceId) {
       return;
     }
 
@@ -48,15 +51,33 @@ export class OrdersSubmitProcessor extends WorkerHost {
       quantity: order.quantity,
     });
 
-    await this.prisma.$transaction([
-      this.prisma.order.update({
+    await this.prisma.$transaction(async (tx) => {
+      if (order.status === OrderStatus.pending) {
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            status: OrderStatus.queued,
+          },
+        });
+
+        await tx.orderStatusLog.create({
+          data: {
+            orderId: order.id,
+            status: OrderStatus.queued,
+            message: "Order queued for provider submission.",
+          },
+        });
+      }
+
+      await tx.order.update({
         where: { id: order.id },
         data: {
           providerOrderId: String(providerOrder.order),
           status: OrderStatus.processing,
         },
-      }),
-      this.prisma.orderStatusLog.create({
+      });
+
+      await tx.orderStatusLog.create({
         data: {
           orderId: order.id,
           status: OrderStatus.processing,
@@ -65,8 +86,9 @@ export class OrdersSubmitProcessor extends WorkerHost {
             providerOrderId: String(providerOrder.order),
           },
         },
-      }),
-      this.prisma.queueJobLog.create({
+      });
+
+      await tx.queueJobLog.create({
         data: {
           queueName: ORDER_SUBMIT_QUEUE,
           jobName: ORDER_SUBMIT_JOB,
@@ -76,8 +98,8 @@ export class OrdersSubmitProcessor extends WorkerHost {
             providerOrderId: String(providerOrder.order),
           },
         },
-      }),
-    ]);
+      });
+    });
 
     await this.orderStatusQueue.add(
       ORDER_STATUS_UPDATE_JOB,

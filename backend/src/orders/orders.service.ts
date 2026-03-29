@@ -7,7 +7,9 @@ import {
 import { InjectQueue } from "@nestjs/bullmq";
 import { OrderStatus, Prisma, WalletTransactionType } from "@prisma/client";
 import { Queue } from "bullmq";
+import { buildPaginationMeta } from "src/common/utils/pagination";
 import { PrismaService } from "src/prisma/prisma.service";
+import { WalletService } from "src/wallet/wallet.service";
 import {
   ORDER_STATUS_UPDATE_QUEUE,
   ORDER_SUBMIT_JOB,
@@ -20,6 +22,7 @@ import { ListOrdersQueryDto } from "./dto/list-orders-query.dto";
 export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly walletService: WalletService,
     @InjectQueue(ORDER_SUBMIT_QUEUE) private readonly orderSubmitQueue: Queue,
     @InjectQueue(ORDER_STATUS_UPDATE_QUEUE) private readonly orderStatusQueue: Queue
   ) {}
@@ -70,39 +73,9 @@ export class OrdersService {
     );
 
     const createdOrder = await this.prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.upsert({
-        where: { userId },
-        update: {},
-        create: { userId },
-      });
+      const wallet = await this.walletService.ensureWalletForUser(userId, tx);
 
       const chargeDecimal = new Prisma.Decimal(chargeAmount.toFixed(2));
-
-      const updatedRows = await tx.wallet.updateMany({
-        where: {
-          id: wallet.id,
-          balance: {
-            gte: chargeDecimal,
-          },
-        },
-        data: {
-          balance: {
-            decrement: chargeDecimal,
-          },
-        },
-      });
-
-      if (updatedRows.count === 0) {
-        throw new BadRequestException("Insufficient wallet balance.");
-      }
-
-      const updatedWallet = await tx.wallet.findUnique({
-        where: { id: wallet.id },
-      });
-
-      if (!updatedWallet) {
-        throw new NotFoundException("Wallet not found.");
-      }
 
       const order = await tx.order.create({
         data: {
@@ -119,14 +92,12 @@ export class OrdersService {
         },
       });
 
-      await tx.walletTransaction.create({
-        data: {
-          walletId: wallet.id,
-          reference: order.id,
-          amount: chargeDecimal,
-          balanceBefore: wallet.balance,
-          balanceAfter: updatedWallet.balance,
+      await this.walletService.deductWallet(
+        {
+          userId,
+          amount: chargeAmount,
           currency: wallet.currency,
+          reference: order.id,
           type: WalletTransactionType.charge,
           description: `Wallet charged for order ${order.id}`,
           metadata: {
@@ -134,9 +105,9 @@ export class OrdersService {
             serviceId: service.id,
             quantity: dto.quantity,
           },
-          status: "completed",
         },
-      });
+        tx
+      );
 
       await tx.orderStatusLog.create({
         data: {
@@ -171,20 +142,6 @@ export class OrdersService {
           },
         }
       );
-
-      await this.prisma.$transaction([
-        this.prisma.order.update({
-          where: { id: createdOrder.id },
-          data: { status: OrderStatus.queued },
-        }),
-        this.prisma.orderStatusLog.create({
-          data: {
-            orderId: createdOrder.id,
-            status: OrderStatus.queued,
-            message: "Order queued for provider submission.",
-          },
-        }),
-      ]);
     } catch {
       await this.rollbackUnqueuedOrder(createdOrder.id, userId, chargeAmount);
       throw new BadGatewayException(
@@ -241,7 +198,7 @@ export class OrdersService {
       success: true,
       message: "Orders loaded successfully.",
       data: items.map((order) => this.serializeOrder(order)),
-      meta: this.buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -326,20 +283,20 @@ export class OrdersService {
         throw new BadRequestException("Order has already been canceled.");
       }
 
-      const wallet = await tx.wallet.upsert({
-        where: { userId },
-        update: {},
-        create: { userId },
-      });
-
-      const updatedWallet = await tx.wallet.update({
-        where: { id: wallet.id },
-        data: {
-          balance: {
-            increment: order.chargeAmount,
+      await this.walletService.creditWallet(
+        {
+          userId,
+          amount: order.chargeAmount.toNumber(),
+          currency: order.currency,
+          reference: order.id,
+          type: WalletTransactionType.refund,
+          description: `Wallet refunded for canceled order ${order.id}`,
+          metadata: {
+            orderId: order.id,
           },
         },
-      });
+        tx
+      );
 
       const updatedOrder = await tx.order.findUnique({
         where: { id: order.id },
@@ -348,23 +305,6 @@ export class OrdersService {
       if (!updatedOrder) {
         throw new NotFoundException("Order not found.");
       }
-
-      await tx.walletTransaction.create({
-        data: {
-          walletId: wallet.id,
-          reference: order.id,
-          amount: order.chargeAmount,
-          balanceBefore: wallet.balance,
-          balanceAfter: updatedWallet.balance,
-          currency: order.currency,
-          type: WalletTransactionType.refund,
-          description: `Wallet refunded for canceled order ${order.id}`,
-          metadata: {
-            orderId: order.id,
-          },
-          status: "completed",
-        },
-      });
 
       await tx.orderStatusLog.create({
         data: {
@@ -395,21 +335,6 @@ export class OrdersService {
         return;
       }
 
-      const wallet = await tx.wallet.upsert({
-        where: { userId },
-        update: {},
-        create: { userId },
-      });
-
-      const updatedWallet = await tx.wallet.update({
-        where: { id: wallet.id },
-        data: {
-          balance: {
-            increment: amount,
-          },
-        },
-      });
-
       await tx.order.update({
         where: { id: orderId },
         data: {
@@ -419,23 +344,20 @@ export class OrdersService {
         },
       });
 
-      await tx.walletTransaction.create({
-        data: {
-          walletId: wallet.id,
+      await this.walletService.creditWallet(
+        {
+          userId,
+          amount: amount.toNumber(),
           reference: orderId,
-          amount,
-          balanceBefore: wallet.balance,
-          balanceAfter: updatedWallet.balance,
-          currency: wallet.currency,
           type: WalletTransactionType.refund,
           description: `Wallet refunded because queueing failed for order ${orderId}`,
           metadata: {
             orderId,
             reason: "queue_failure",
           },
-          status: "completed",
         },
-      });
+        tx
+      );
 
       await tx.orderStatusLog.create({
         data: {
@@ -505,17 +427,6 @@ export class OrdersService {
     return {
       ...order,
       chargeAmount: order.chargeAmount.toNumber(),
-    };
-  }
-
-  private buildPaginationMeta(page: number, limit: number, total: number) {
-    return {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-      hasNextPage: page * limit < total,
-      hasPreviousPage: page > 1,
     };
   }
 }

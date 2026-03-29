@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { BullModule } from "@nestjs/bullmq";
 import { ProviderModule } from "src/provider/provider.module";
 import { PrismaModule } from "src/prisma/prisma.module";
+import { WalletModule } from "src/wallet/wallet.module";
 import { OrdersController } from "./orders.controller";
 import {
   ORDER_STATUS_UPDATE_QUEUE,
@@ -15,6 +16,7 @@ import { OrdersService } from "./orders.service";
   imports: [
     PrismaModule,
     ProviderModule,
+    WalletModule,
     BullModule.registerQueue(
       {
         name: ORDER_SUBMIT_QUEUE,
