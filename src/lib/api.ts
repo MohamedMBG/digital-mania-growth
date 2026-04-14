@@ -110,12 +110,22 @@ export async function apiRequestWithRefresh<TResponse>(
       throw error;
     }
 
-    const refreshed = await apiRequest<{
+    let refreshed: {
       success: true;
       data: { user: AuthUser; tokens: AuthTokens };
-    }>("/auth/refresh", {
-      method: "POST",
-    });
+    };
+
+    try {
+      refreshed = await apiRequest<{
+        success: true;
+        data: { user: AuthUser; tokens: AuthTokens };
+      }>("/auth/refresh", {
+        method: "POST",
+      });
+    } catch (refreshError) {
+      clearAccessToken();
+      throw refreshError;
+    }
 
     setAccessToken(refreshed.data.tokens.accessToken);
 
