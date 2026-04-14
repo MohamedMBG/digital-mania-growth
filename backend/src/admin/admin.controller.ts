@@ -10,6 +10,7 @@ import { AdminCreateServiceDto } from "./dto/admin-create-service.dto";
 import { AdminListQueryDto } from "./dto/admin-list-query.dto";
 import { AdminUpdateOrderDto } from "./dto/admin-update-order.dto";
 import { AdminUpdateServiceDto } from "./dto/admin-update-service.dto";
+import { AdminUpdateUserDto } from "./dto/admin-update-user.dto";
 import { AdminWalletAdjustmentDto } from "./dto/admin-wallet-adjustment.dto";
 
 @Controller("admin")
@@ -21,6 +22,15 @@ export class AdminController {
   @Get("users")
   getUsers(@Query() query: AdminListQueryDto) {
     return this.adminService.getUsers(query);
+  }
+
+  @Patch("users/:id")
+  updateUser(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: AdminUpdateUserDto
+  ) {
+    return this.adminService.updateUser(actor, id, dto);
   }
 
   @Get("orders")
@@ -67,6 +77,14 @@ export class AdminController {
     @Body() dto: AdminUpdateOrderDto
   ) {
     return this.adminService.updateOrder(actor, id, dto);
+  }
+
+  @Patch("orders/:id/cancel")
+  cancelOrder(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param("id") id: string
+  ) {
+    return this.adminService.cancelOrder(actor, id);
   }
 
   @Post("wallet-adjustments")

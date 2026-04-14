@@ -7,7 +7,11 @@ import {
 import { InjectQueue } from "@nestjs/bullmq";
 import { OrderStatus, Prisma, WalletTransactionType } from "@prisma/client";
 import { Queue } from "bullmq";
+import { buildPaginationMeta } from "src/common/utils/pagination";
+import { AuthenticatedUser } from "src/auth/types/authenticated-user.type";
 import { PrismaService } from "src/prisma/prisma.service";
+import { ProviderService } from "src/provider/provider.service";
+import { WalletService } from "src/wallet/wallet.service";
 import {
   ORDER_STATUS_UPDATE_QUEUE,
   ORDER_SUBMIT_JOB,
@@ -20,6 +24,8 @@ import { ListOrdersQueryDto } from "./dto/list-orders-query.dto";
 export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly walletService: WalletService,
+    private readonly providerService: ProviderService,
     @InjectQueue(ORDER_SUBMIT_QUEUE) private readonly orderSubmitQueue: Queue,
     @InjectQueue(ORDER_STATUS_UPDATE_QUEUE) private readonly orderStatusQueue: Queue
   ) {}
@@ -70,39 +76,9 @@ export class OrdersService {
     );
 
     const createdOrder = await this.prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.upsert({
-        where: { userId },
-        update: {},
-        create: { userId },
-      });
+      const wallet = await this.walletService.ensureWalletForUser(userId, tx);
 
       const chargeDecimal = new Prisma.Decimal(chargeAmount.toFixed(2));
-
-      const updatedRows = await tx.wallet.updateMany({
-        where: {
-          id: wallet.id,
-          balance: {
-            gte: chargeDecimal,
-          },
-        },
-        data: {
-          balance: {
-            decrement: chargeDecimal,
-          },
-        },
-      });
-
-      if (updatedRows.count === 0) {
-        throw new BadRequestException("Insufficient wallet balance.");
-      }
-
-      const updatedWallet = await tx.wallet.findUnique({
-        where: { id: wallet.id },
-      });
-
-      if (!updatedWallet) {
-        throw new NotFoundException("Wallet not found.");
-      }
 
       const order = await tx.order.create({
         data: {
@@ -119,14 +95,12 @@ export class OrdersService {
         },
       });
 
-      await tx.walletTransaction.create({
-        data: {
-          walletId: wallet.id,
-          reference: order.id,
-          amount: chargeDecimal,
-          balanceBefore: wallet.balance,
-          balanceAfter: updatedWallet.balance,
+      await this.walletService.deductWallet(
+        {
+          userId,
+          amount: chargeAmount,
           currency: wallet.currency,
+          reference: order.id,
           type: WalletTransactionType.charge,
           description: `Wallet charged for order ${order.id}`,
           metadata: {
@@ -134,9 +108,9 @@ export class OrdersService {
             serviceId: service.id,
             quantity: dto.quantity,
           },
-          status: "completed",
         },
-      });
+        tx
+      );
 
       await tx.orderStatusLog.create({
         data: {
@@ -171,20 +145,6 @@ export class OrdersService {
           },
         }
       );
-
-      await this.prisma.$transaction([
-        this.prisma.order.update({
-          where: { id: createdOrder.id },
-          data: { status: OrderStatus.queued },
-        }),
-        this.prisma.orderStatusLog.create({
-          data: {
-            orderId: createdOrder.id,
-            status: OrderStatus.queued,
-            message: "Order queued for provider submission.",
-          },
-        }),
-      ]);
     } catch {
       await this.rollbackUnqueuedOrder(createdOrder.id, userId, chargeAmount);
       throw new BadGatewayException(
@@ -241,7 +201,7 @@ export class OrdersService {
       success: true,
       message: "Orders loaded successfully.",
       data: items.map((order) => this.serializeOrder(order)),
-      meta: this.buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -289,11 +249,18 @@ export class OrdersService {
   }
 
   async cancelOrder(userId: string, orderId: string) {
-    const order = await this.prisma.order.findFirst({
-      where: {
-        id: orderId,
-        userId,
-      },
+    const cancelledOrder = await this.cancelOrderWithRefund(
+      userId,
+      orderId,
+      "Order canceled and wallet refunded."
+    );
+
+    return this.getOrderById(userId, cancelledOrder.id, "Order canceled successfully.");
+  }
+
+  async cancelOrderAsAdmin(actor: AuthenticatedUser, orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
     });
 
     if (!order) {
@@ -303,84 +270,114 @@ export class OrdersService {
     const cancellableStatuses: OrderStatus[] = [OrderStatus.pending, OrderStatus.queued];
 
     if (!cancellableStatuses.includes(order.status)) {
-      throw new BadRequestException("Only pending or queued orders can be canceled.");
+      throw new BadRequestException(
+        "Admin cancellation is only allowed for pending or queued orders until provider-safe partial refund rules are implemented."
+      );
     }
 
-    const cancelledOrder = await this.prisma.$transaction(async (tx) => {
-      const updatedOrders = await tx.order.updateMany({
+    if (order.providerOrderId) {
+      await this.providerService.cancelOrder({
+        order: order.providerOrderId,
+      });
+    }
+
+    const cancelledOrder = await this.cancelOrderWithRefund(
+      order.userId,
+      order.id,
+      "Order canceled by admin and wallet refunded.",
+      {
+        actorId: actor.id,
+        actorEmail: actor.email,
+        providerOrderId: order.providerOrderId,
+      }
+    );
+
+    return this.getOrderById(
+      order.userId,
+      cancelledOrder.id,
+      "Order canceled successfully by admin."
+    );
+  }
+
+  async handleSubmissionFailure(orderId: string, reason: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+      });
+
+      if (!order || order.providerOrderId) {
+        return;
+      }
+
+      const terminalStatuses = new Set<OrderStatus>([
+        OrderStatus.failed,
+        OrderStatus.canceled,
+        OrderStatus.completed,
+        OrderStatus.partial,
+      ]);
+
+      if (terminalStatuses.has(order.status)) {
+        return;
+      }
+
+      const existingRefund = await tx.walletTransaction.findFirst({
         where: {
-          id: order.id,
-          userId,
-          status: {
-            in: cancellableStatuses,
-          },
+          reference: order.id,
+          type: WalletTransactionType.refund,
         },
+      });
+
+      await tx.order.update({
+        where: { id: order.id },
         data: {
-          status: OrderStatus.canceled,
+          status: OrderStatus.failed,
           canceledAt: new Date(),
           remains: 0,
         },
       });
 
-      if (updatedOrders.count === 0) {
-        throw new BadRequestException("Order has already been canceled.");
-      }
-
-      const wallet = await tx.wallet.upsert({
-        where: { userId },
-        update: {},
-        create: { userId },
-      });
-
-      const updatedWallet = await tx.wallet.update({
-        where: { id: wallet.id },
-        data: {
-          balance: {
-            increment: order.chargeAmount,
+      if (!existingRefund) {
+        await this.walletService.creditWallet(
+          {
+            userId: order.userId,
+            amount: order.chargeAmount.toNumber(),
+            currency: order.currency,
+            reference: order.id,
+            type: WalletTransactionType.refund,
+            description: `Wallet refunded because provider submission failed for order ${order.id}`,
+            metadata: {
+              orderId: order.id,
+              reason,
+              source: "submit_processor_failure",
+            },
           },
-        },
-      });
-
-      const updatedOrder = await tx.order.findUnique({
-        where: { id: order.id },
-      });
-
-      if (!updatedOrder) {
-        throw new NotFoundException("Order not found.");
+          tx
+        );
       }
-
-      await tx.walletTransaction.create({
-        data: {
-          walletId: wallet.id,
-          reference: order.id,
-          amount: order.chargeAmount,
-          balanceBefore: wallet.balance,
-          balanceAfter: updatedWallet.balance,
-          currency: order.currency,
-          type: WalletTransactionType.refund,
-          description: `Wallet refunded for canceled order ${order.id}`,
-          metadata: {
-            orderId: order.id,
-          },
-          status: "completed",
-        },
-      });
 
       await tx.orderStatusLog.create({
         data: {
           orderId: order.id,
-          status: OrderStatus.canceled,
-          message: "Order canceled and wallet refunded.",
+          status: OrderStatus.failed,
+          message: "Provider submission failed permanently. Wallet refunded automatically.",
+          metadata: {
+            reason,
+          },
         },
       });
 
-      return updatedOrder;
+      await tx.queueJobLog.create({
+        data: {
+          queueName: ORDER_SUBMIT_QUEUE,
+          jobName: ORDER_SUBMIT_JOB,
+          status: "failed",
+          payload: {
+            orderId: order.id,
+            reason,
+          },
+        },
+      });
     });
-
-    await this.orderSubmitQueue.remove(order.id).catch(() => undefined);
-    await this.removeQueuedStatusJobs(order.id);
-
-    return this.getOrderById(userId, cancelledOrder.id, "Order canceled successfully.");
   }
 
   private async rollbackUnqueuedOrder(orderId: string, userId: string, chargeAmount: number) {
@@ -395,21 +392,6 @@ export class OrdersService {
         return;
       }
 
-      const wallet = await tx.wallet.upsert({
-        where: { userId },
-        update: {},
-        create: { userId },
-      });
-
-      const updatedWallet = await tx.wallet.update({
-        where: { id: wallet.id },
-        data: {
-          balance: {
-            increment: amount,
-          },
-        },
-      });
-
       await tx.order.update({
         where: { id: orderId },
         data: {
@@ -419,23 +401,20 @@ export class OrdersService {
         },
       });
 
-      await tx.walletTransaction.create({
-        data: {
-          walletId: wallet.id,
+      await this.walletService.creditWallet(
+        {
+          userId,
+          amount: amount.toNumber(),
           reference: orderId,
-          amount,
-          balanceBefore: wallet.balance,
-          balanceAfter: updatedWallet.balance,
-          currency: wallet.currency,
           type: WalletTransactionType.refund,
           description: `Wallet refunded because queueing failed for order ${orderId}`,
           metadata: {
             orderId,
             reason: "queue_failure",
           },
-          status: "completed",
         },
-      });
+        tx
+      );
 
       await tx.orderStatusLog.create({
         data: {
@@ -508,14 +487,88 @@ export class OrdersService {
     };
   }
 
-  private buildPaginationMeta(page: number, limit: number, total: number) {
-    return {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-      hasNextPage: page * limit < total,
-      hasPreviousPage: page > 1,
-    };
+  private async cancelOrderWithRefund(
+    userId: string,
+    orderId: string,
+    statusMessage: string,
+    metadata?: Record<string, unknown>
+  ) {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        id: orderId,
+        userId,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException("Order not found.");
+    }
+
+    const cancellableStatuses: OrderStatus[] = [OrderStatus.pending, OrderStatus.queued];
+
+    if (!cancellableStatuses.includes(order.status)) {
+      throw new BadRequestException("Only pending or queued orders can be canceled.");
+    }
+
+    const cancelledOrder = await this.prisma.$transaction(async (tx) => {
+      const updatedOrders = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          userId,
+          status: {
+            in: cancellableStatuses,
+          },
+        },
+        data: {
+          status: OrderStatus.canceled,
+          canceledAt: new Date(),
+          remains: 0,
+        },
+      });
+
+      if (updatedOrders.count === 0) {
+        throw new BadRequestException("Order has already been canceled.");
+      }
+
+      await this.walletService.creditWallet(
+        {
+          userId,
+          amount: order.chargeAmount.toNumber(),
+          currency: order.currency,
+          reference: order.id,
+          type: WalletTransactionType.refund,
+          description: `Wallet refunded for canceled order ${order.id}`,
+          metadata: {
+            orderId: order.id,
+            ...(metadata ?? {}),
+          },
+        },
+        tx
+      );
+
+      const updatedOrder = await tx.order.findUnique({
+        where: { id: order.id },
+      });
+
+      if (!updatedOrder) {
+        throw new NotFoundException("Order not found.");
+      }
+
+      await tx.orderStatusLog.create({
+        data: {
+          orderId: order.id,
+          status: OrderStatus.canceled,
+          message: statusMessage,
+          metadata: metadata as Prisma.InputJsonValue | undefined,
+        },
+      });
+
+      return updatedOrder;
+    });
+
+    await this.orderSubmitQueue.remove(order.id).catch(() => undefined);
+    await this.removeQueuedStatusJobs(order.id);
+
+    return cancelledOrder;
   }
 }

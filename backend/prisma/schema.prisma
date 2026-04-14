@@ -41,11 +41,6 @@ enum OrderStatus {
   failed
 }
 
-enum TicketStatus {
-  open
-  closed
-}
-
 model User {
   id               String   @id @default(cuid())
   email            String   @unique
@@ -61,8 +56,6 @@ model User {
   wallet Wallet?
   orders Order[]
   adminActionLogs AdminActionLog[]
-  tickets Ticket[]
-  ticketMessages TicketMessage[]
 }
 
 model Wallet {
@@ -250,32 +243,3 @@ model AdminActionLog {
   @@index([entityType, createdAt])
 }
 
-model Ticket {
-  id          String          @id @default(cuid())
-  userId      String
-  subject     String
-  status      TicketStatus    @default(open)
-  closedAt    DateTime?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages    TicketMessage[]
-
-  @@index([userId, createdAt])
-  @@index([status, createdAt])
-}
-
-model TicketMessage {
-  id          String      @id @default(cuid())
-  ticketId     String
-  authorId     String
-  message      String
-  createdAt    DateTime    @default(now())
-
-  ticket       Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  author       User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
-
-  @@index([ticketId, createdAt])
-  @@index([authorId, createdAt])
-}

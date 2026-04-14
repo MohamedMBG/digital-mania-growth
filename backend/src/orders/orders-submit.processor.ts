@@ -1,10 +1,11 @@
-import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { OnWorkerEvent, Processor, WorkerHost } from "@nestjs/bullmq";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { OrderStatus } from "@prisma/client";
 import { Job, Queue } from "bullmq";
 import { InjectQueue } from "@nestjs/bullmq";
 import { PrismaService } from "src/prisma/prisma.service";
 import { ProviderService } from "src/provider/provider.service";
+import { OrdersService } from "./orders.service";
 import {
   ORDER_STATUS_UPDATE_JOB,
   ORDER_STATUS_UPDATE_QUEUE,
@@ -19,6 +20,7 @@ export class OrdersSubmitProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly providerService: ProviderService,
+    private readonly ordersService: OrdersService,
     @InjectQueue(ORDER_STATUS_UPDATE_QUEUE)
     private readonly orderStatusQueue: Queue
   ) {
@@ -38,7 +40,10 @@ export class OrdersSubmitProcessor extends WorkerHost {
       throw new NotFoundException("Queued order not found.");
     }
 
-    if (order.status !== OrderStatus.queued || !order.providerServiceId) {
+    const isQueueableOrderStatus =
+      order.status === OrderStatus.pending || order.status === OrderStatus.queued;
+
+    if (!isQueueableOrderStatus || !order.providerServiceId) {
       return;
     }
 
@@ -48,15 +53,33 @@ export class OrdersSubmitProcessor extends WorkerHost {
       quantity: order.quantity,
     });
 
-    await this.prisma.$transaction([
-      this.prisma.order.update({
+    await this.prisma.$transaction(async (tx) => {
+      if (order.status === OrderStatus.pending) {
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            status: OrderStatus.queued,
+          },
+        });
+
+        await tx.orderStatusLog.create({
+          data: {
+            orderId: order.id,
+            status: OrderStatus.queued,
+            message: "Order queued for provider submission.",
+          },
+        });
+      }
+
+      await tx.order.update({
         where: { id: order.id },
         data: {
           providerOrderId: String(providerOrder.order),
           status: OrderStatus.processing,
         },
-      }),
-      this.prisma.orderStatusLog.create({
+      });
+
+      await tx.orderStatusLog.create({
         data: {
           orderId: order.id,
           status: OrderStatus.processing,
@@ -65,8 +88,9 @@ export class OrdersSubmitProcessor extends WorkerHost {
             providerOrderId: String(providerOrder.order),
           },
         },
-      }),
-      this.prisma.queueJobLog.create({
+      });
+
+      await tx.queueJobLog.create({
         data: {
           queueName: ORDER_SUBMIT_QUEUE,
           jobName: ORDER_SUBMIT_JOB,
@@ -76,8 +100,8 @@ export class OrdersSubmitProcessor extends WorkerHost {
             providerOrderId: String(providerOrder.order),
           },
         },
-      }),
-    ]);
+      });
+    });
 
     await this.orderStatusQueue.add(
       ORDER_STATUS_UPDATE_JOB,
@@ -91,6 +115,28 @@ export class OrdersSubmitProcessor extends WorkerHost {
           delay: 5_000,
         },
       }
+    );
+  }
+
+  @OnWorkerEvent("failed")
+  async onFailed(job: Job<OrderSubmitJobData>, error: Error) {
+    if (job.name !== ORDER_SUBMIT_JOB) {
+      return;
+    }
+
+    const maxAttempts =
+      typeof job.opts.attempts === "number" && job.opts.attempts > 0
+        ? job.opts.attempts
+        : 1;
+    const attemptsMade = job.attemptsMade ?? 0;
+
+    if (attemptsMade < maxAttempts) {
+      return;
+    }
+
+    await this.ordersService.handleSubmissionFailure(
+      job.data.orderId,
+      error.message || "Provider submission failed."
     );
   }
 }

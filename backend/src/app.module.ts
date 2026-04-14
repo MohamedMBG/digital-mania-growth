@@ -13,7 +13,6 @@ import { PaymentsModule } from "./payments/payments.module";
 import { PlatformsModule } from "./platforms/platforms.module";
 import { ProviderModule } from "./provider/provider.module";
 import { ServicesModule } from "./services/services.module";
-import { TicketsModule } from "./tickets/tickets.module";
 import { UsersModule } from "./users/users.module";
 import { WalletModule } from "./wallet/wallet.module";
 import { RedisModule } from "./infrastructure/redis/redis.module";
@@ -34,7 +33,6 @@ import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
     PaymentsModule,
     OrdersModule,
     ProviderModule,
-    TicketsModule,
     PlatformsModule,
     CategoriesModule,
     ServicesModule,

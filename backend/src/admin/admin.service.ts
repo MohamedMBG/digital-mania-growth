@@ -14,10 +14,13 @@ import { PrismaService } from "src/prisma/prisma.service";
 import { ProviderService } from "src/provider/provider.service";
 import { WalletService } from "src/wallet/wallet.service";
 import { AuthenticatedUser } from "src/auth/types/authenticated-user.type";
+import { OrdersService } from "src/orders/orders.service";
+import { UsersService } from "src/users/users.service";
 import { AdminCreateServiceDto } from "./dto/admin-create-service.dto";
 import { AdminListQueryDto } from "./dto/admin-list-query.dto";
 import { AdminUpdateOrderDto } from "./dto/admin-update-order.dto";
 import { AdminUpdateServiceDto } from "./dto/admin-update-service.dto";
+import { AdminUpdateUserDto } from "./dto/admin-update-user.dto";
 import { AdminWalletAdjustmentDto } from "./dto/admin-wallet-adjustment.dto";
 
 @Injectable()
@@ -25,7 +28,9 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly providerService: ProviderService,
-    private readonly walletService: WalletService
+    private readonly walletService: WalletService,
+    private readonly ordersService: OrdersService,
+    private readonly usersService: UsersService
   ) {}
 
   async getUsers(query: AdminListQueryDto) {
@@ -73,6 +78,26 @@ export class AdminService {
         updatedAt: user.updatedAt,
       })),
       meta: this.buildPaginationMeta(page, limit, total),
+    };
+  }
+
+  async updateUser(actor: AuthenticatedUser, userId: string, dto: AdminUpdateUserDto) {
+    const updatedUser = await this.usersService.updateAdminManagedUser(userId, {
+      ...(dto.role !== undefined ? { role: dto.role } : {}),
+      ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+      ...(dto.fullName !== undefined ? { fullName: dto.fullName } : {}),
+    });
+
+    await this.logAdminAction(actor.id, "user.update", "user", updatedUser.id, {
+      role: dto.role,
+      isActive: dto.isActive,
+      fullName: dto.fullName,
+    });
+
+    return {
+      success: true,
+      message: "User updated successfully.",
+      data: this.serializeAdminUser(updatedUser),
     };
   }
 
@@ -344,6 +369,12 @@ export class AdminService {
   }
 
   async updateOrder(actor: AuthenticatedUser, orderId: string, dto: AdminUpdateOrderDto) {
+    if (dto.status === OrderStatus.canceled) {
+      throw new BadRequestException(
+        "Use the dedicated admin cancel endpoint so provider cancellation and wallet refunds stay synchronized."
+      );
+    }
+
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
     });
@@ -401,6 +432,16 @@ export class AdminService {
       message: "Order updated successfully.",
       data: this.serializeOrder(updated),
     };
+  }
+
+  async cancelOrder(actor: AuthenticatedUser, orderId: string) {
+    const result = await this.ordersService.cancelOrderAsAdmin(actor, orderId);
+
+    await this.logAdminAction(actor.id, "order.cancel", "order", orderId, {
+      actorId: actor.id,
+    });
+
+    return result;
   }
 
   async adjustWallet(actor: AuthenticatedUser, dto: AdminWalletAdjustmentDto) {
@@ -547,6 +588,28 @@ export class AdminService {
     return {
       ...order,
       chargeAmount: order.chargeAmount.toNumber(),
+    };
+  }
+
+  private serializeAdminUser(user: {
+    id: string;
+    email: string;
+    fullName: string | null;
+    role: UserRole;
+    provider: string;
+    isActive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      provider: user.provider,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     };
   }
 
