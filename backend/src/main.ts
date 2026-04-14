@@ -22,8 +22,10 @@ async function bootstrap() {
   const apiPrefix = config.get<string>("app.apiPrefix", "api");
   const frontendUrl = config.get<string>("app.frontendUrl", "http://localhost:8080");
   const isProduction = config.get<string>("app.nodeEnv") === "production";
+  const trustProxy = config.get<boolean>("app.trustProxy", false);
 
   server.disable("x-powered-by");
+  server.set("trust proxy", trustProxy);
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     res.setHeader("X-Content-Type-Options", "nosniff");

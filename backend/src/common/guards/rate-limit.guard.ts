@@ -58,15 +58,8 @@ export class RateLimitGuard implements CanActivate {
   }
 
   private buildKey(request: RateLimitedRequest, options: RateLimitOptions) {
-    const forwardedFor = request.headers["x-forwarded-for"];
-    const forwardedIp = Array.isArray(forwardedFor)
-      ? forwardedFor[0]
-      : forwardedFor?.split(",")[0];
     const identifier =
-      forwardedIp?.trim() ||
-      request.ip ||
-      request.socket.remoteAddress ||
-      "anonymous";
+      request.ip || request.socket.remoteAddress || "anonymous";
 
     return [options.keyPrefix ?? request.route?.path ?? request.path, identifier].join(":");
   }

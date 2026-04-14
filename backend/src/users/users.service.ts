@@ -57,6 +57,22 @@ export class UsersService {
     });
   }
 
+  async updateAdminManagedUser(
+    userId: string,
+    data: {
+      role?: UserRole;
+      isActive?: boolean;
+      fullName?: string | null;
+    }
+  ) {
+    await this.ensureExists(userId);
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+  }
+
   toPublicUser(user: User): PublicUser {
     return {
       id: user.id,

@@ -29,7 +29,10 @@ export class AuthService {
     const tokens = await this.issueTokens(user);
     await this.storeRefreshToken(user.id, tokens.refreshToken);
 
-    return this.buildAuthResponse(user, tokens);
+    return {
+      refreshToken: tokens.refreshToken,
+      response: this.buildAuthResponse(user, tokens.accessToken),
+    };
   }
 
   async login(dto: LoginDto) {
@@ -48,7 +51,10 @@ export class AuthService {
     const tokens = await this.issueTokens(user);
     await this.storeRefreshToken(user.id, tokens.refreshToken);
 
-    return this.buildAuthResponse(user, tokens);
+    return {
+      refreshToken: tokens.refreshToken,
+      response: this.buildAuthResponse(user, tokens.accessToken),
+    };
   }
 
   async refresh(refreshToken: string) {
@@ -68,7 +74,10 @@ export class AuthService {
     const tokens = await this.issueTokens(user);
     await this.storeRefreshToken(user.id, tokens.refreshToken);
 
-    return this.buildAuthResponse(user, tokens);
+    return {
+      refreshToken: tokens.refreshToken,
+      response: this.buildAuthResponse(user, tokens.accessToken),
+    };
   }
 
   async logout(userId: string) {
@@ -153,7 +162,7 @@ export class AuthService {
 
   private buildAuthResponse(
     user: User,
-    tokens: { accessToken: string; refreshToken: string }
+    accessToken: string
   ) {
     return {
       success: true,
@@ -161,11 +170,9 @@ export class AuthService {
       data: {
         user: this.usersService.toPublicUser(user),
         tokens: {
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
+          accessToken,
           tokenType: "Bearer",
           expiresIn: this.configService.getOrThrow<string>("jwt.accessExpiresIn"),
-          refreshExpiresIn: this.configService.getOrThrow<string>("jwt.refreshExpiresIn"),
         },
       },
     };

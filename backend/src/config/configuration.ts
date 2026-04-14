@@ -5,6 +5,7 @@ export default () => ({
     apiPrefix: process.env.API_PREFIX ?? "api",
     frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:8080",
     logLevel: process.env.LOG_LEVEL ?? "debug",
+    trustProxy: process.env.TRUST_PROXY === "true",
   },
   database: {
     url: process.env.DATABASE_URL,
@@ -21,6 +22,7 @@ export default () => ({
     accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? "15m",
     refreshSecret: process.env.JWT_REFRESH_SECRET,
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? "7d",
+    refreshCookieName: process.env.JWT_REFRESH_COOKIE_NAME ?? "nexora_refresh",
   },
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY,
@@ -40,5 +42,10 @@ export default () => ({
   },
   cache: {
     ttlSeconds: Number(process.env.CACHE_TTL_SECONDS ?? 120),
+  },
+  adminBootstrap: {
+    email: process.env.ADMIN_BOOTSTRAP_EMAIL?.trim().toLowerCase() || undefined,
+    password: process.env.ADMIN_BOOTSTRAP_PASSWORD,
+    fullName: process.env.ADMIN_BOOTSTRAP_FULL_NAME?.trim() || "Platform Admin",
   },
 });

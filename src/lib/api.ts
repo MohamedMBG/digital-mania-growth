@@ -21,10 +21,8 @@ export type AuthUser = {
 
 export type AuthTokens = {
   accessToken: string;
-  refreshToken: string;
   tokenType: "Bearer";
   expiresIn: string;
-  refreshExpiresIn: string;
 };
 
 type RequestOptions = {
@@ -34,36 +32,16 @@ type RequestOptions = {
   headers?: Record<string, string>;
 };
 
-type StoredSession = {
-  user: AuthUser;
-  accessToken: string;
-  refreshToken: string;
+let accessTokenMemory: string | null = null;
+
+export const getAccessToken = () => accessTokenMemory;
+
+export const setAccessToken = (token: string | null) => {
+  accessTokenMemory = token;
 };
 
-const SESSION_KEY = "nexora-session";
-
-export const getStoredSession = (): StoredSession | null => {
-  if (typeof window === "undefined") return null;
-
-  const raw = window.localStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw) as StoredSession;
-  } catch {
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-};
-
-export const setStoredSession = (session: StoredSession) => {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-};
-
-export const clearStoredSession = () => {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(SESSION_KEY);
+export const clearAccessToken = () => {
+  accessTokenMemory = null;
 };
 
 export const getApiErrorMessage = (error: unknown) => {
@@ -86,6 +64,7 @@ export async function apiRequest<TResponse>(
 ): Promise<TResponse> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? "GET",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
@@ -117,8 +96,7 @@ export async function apiRequestWithRefresh<TResponse>(
   path: string,
   options: RequestOptions = {}
 ): Promise<TResponse> {
-  const session = getStoredSession();
-  const token = options.token ?? session?.accessToken ?? null;
+  const token = options.token ?? getAccessToken();
 
   try {
     return await apiRequest<TResponse>(path, { ...options, token });
@@ -128,7 +106,7 @@ export async function apiRequestWithRefresh<TResponse>(
         ? Number((error as ApiError).statusCode)
         : undefined;
 
-    if (statusCode !== 401 || !session?.refreshToken) {
+    if (statusCode !== 401) {
       throw error;
     }
 
@@ -137,20 +115,13 @@ export async function apiRequestWithRefresh<TResponse>(
       data: { user: AuthUser; tokens: AuthTokens };
     }>("/auth/refresh", {
       method: "POST",
-      body: { refreshToken: session.refreshToken },
     });
 
-    const nextSession = {
-      user: refreshed.data.user,
-      accessToken: refreshed.data.tokens.accessToken,
-      refreshToken: refreshed.data.tokens.refreshToken,
-    };
-
-    setStoredSession(nextSession);
+    setAccessToken(refreshed.data.tokens.accessToken);
 
     return apiRequest<TResponse>(path, {
       ...options,
-      token: nextSession.accessToken,
+      token: refreshed.data.tokens.accessToken,
     });
   }
 }

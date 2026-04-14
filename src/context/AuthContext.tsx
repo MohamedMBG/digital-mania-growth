@@ -11,9 +11,8 @@ import {
   apiRequestWithRefresh,
   AuthTokens,
   AuthUser,
-  clearStoredSession,
-  getStoredSession,
-  setStoredSession,
+  clearAccessToken,
+  setAccessToken,
 } from "@/lib/api";
 
 type AuthContextValue = {
@@ -47,39 +46,31 @@ type MeResponse = {
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const initialSession = getStoredSession();
-  const [user, setUser] = useState<AuthUser | null>(initialSession?.user ?? null);
-  const [accessToken, setAccessToken] = useState<string | null>(
-    initialSession?.accessToken ?? null
-  );
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [accessToken, setAccessTokenState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const initialize = async () => {
-      const session = getStoredSession();
-
-      if (!session?.accessToken) {
-        setIsLoading(false);
-        return;
-      }
-
       try {
-        const response = await apiRequestWithRefresh<MeResponse>("/auth/me", {
-          token: session.accessToken,
+        const response = await apiRequest<{
+          success: true;
+          message: string;
+          data: {
+            user: AuthUser;
+            tokens: AuthTokens;
+          };
+        }>("/auth/refresh", {
+          method: "POST",
         });
 
-        const nextSession = {
-          ...(getStoredSession() ?? session),
-          user: response.data.user,
-        };
-
-        setStoredSession(nextSession);
         setUser(response.data.user);
-        setAccessToken(nextSession.accessToken);
+        setAccessToken(response.data.tokens.accessToken);
+        setAccessTokenState(response.data.tokens.accessToken);
       } catch {
-        clearStoredSession();
+        clearAccessToken();
         setUser(null);
-        setAccessToken(null);
+        setAccessTokenState(null);
       } finally {
         setIsLoading(false);
       }
@@ -89,17 +80,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const persistSession = (response: AuthResponse) => {
-    const nextSession = {
-      user: response.data.user,
-      accessToken: response.data.tokens.accessToken,
-      refreshToken: response.data.tokens.refreshToken,
-    };
+    setAccessToken(response.data.tokens.accessToken);
+    setUser(response.data.user);
+    setAccessTokenState(response.data.tokens.accessToken);
 
-    setStoredSession(nextSession);
-    setUser(nextSession.user);
-    setAccessToken(nextSession.accessToken);
-
-    return nextSession.user;
+    return response.data.user;
   };
 
   const value = useMemo<AuthContextValue>(
@@ -137,23 +122,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             });
           }
         } finally {
-          clearStoredSession();
+          clearAccessToken();
           setUser(null);
-          setAccessToken(null);
+          setAccessTokenState(null);
         }
       },
       refreshProfile: async () => {
         const response = await apiRequestWithRefresh<MeResponse>("/auth/me", {
           token: accessToken,
         });
-
-        const session = getStoredSession();
-        if (session) {
-          setStoredSession({
-            ...session,
-            user: response.data.user,
-          });
-        }
 
         setUser(response.data.user);
       },
