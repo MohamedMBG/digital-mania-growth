@@ -219,6 +219,24 @@ model OrderStatusLog {
   @@index([orderId, createdAt])
 }
 
+model OutboxEvent {
+  id            String   @id @default(cuid())
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payload       Json
+  status        String   @default("pending")
+  attempts      Int      @default(0)
+  lastError     String?
+  availableAt   DateTime @default(now())
+  processedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, availableAt])
+  @@index([aggregateType, aggregateId])
+}
+
 model QueueJobLog {
   id         String   @id @default(cuid())
   queueName  String

@@ -1,5 +1,4 @@
 import {
-  BadGatewayException,
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -9,6 +8,11 @@ import { OrderStatus, Prisma, WalletTransactionType } from "@prisma/client";
 import { Queue } from "bullmq";
 import { buildPaginationMeta } from "src/common/utils/pagination";
 import { AuthenticatedUser } from "src/auth/types/authenticated-user.type";
+import {
+  OUTBOX_AGGREGATE_ORDER,
+  OUTBOX_EVENT_ORDER_SUBMIT,
+} from "src/infrastructure/outbox/outbox.constants";
+import { OutboxService } from "src/infrastructure/outbox/outbox.service";
 import { PrismaService } from "src/prisma/prisma.service";
 import { ProviderService } from "src/provider/provider.service";
 import { WalletService } from "src/wallet/wallet.service";
@@ -26,6 +30,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
     private readonly providerService: ProviderService,
+    private readonly outbox: OutboxService,
     @InjectQueue(ORDER_SUBMIT_QUEUE) private readonly orderSubmitQueue: Queue,
     @InjectQueue(ORDER_STATUS_UPDATE_QUEUE) private readonly orderStatusQueue: Queue
   ) {}
@@ -75,82 +80,79 @@ export class OrdersService {
       service.pricePerK.toNumber()
     );
 
-    const createdOrder = await this.prisma.$transaction(async (tx) => {
-      const wallet = await this.walletService.ensureWalletForUser(userId, tx);
+    const createdOrder = await this.prisma.$transaction(
+      async (tx) => {
+        const wallet = await this.walletService.ensureWalletForUser(userId, tx);
 
-      const chargeDecimal = new Prisma.Decimal(chargeAmount.toFixed(2));
+        const chargeDecimal = new Prisma.Decimal(chargeAmount.toFixed(2));
 
-      const order = await tx.order.create({
-        data: {
-          userId,
-          serviceId: service.id,
-          quantity: dto.quantity,
-          chargeAmount: chargeDecimal,
-          currency: wallet.currency,
-          targetUrl: dto.targetUrl,
-          status: OrderStatus.pending,
-          providerServiceId: service.providerServiceId,
-          remains: dto.quantity,
-          notes: dto.notes,
-        },
-      });
-
-      await this.walletService.deductWallet(
-        {
-          userId,
-          amount: chargeAmount,
-          currency: wallet.currency,
-          reference: order.id,
-          type: WalletTransactionType.charge,
-          description: `Wallet charged for order ${order.id}`,
-          metadata: {
-            orderId: order.id,
+        const order = await tx.order.create({
+          data: {
+            userId,
             serviceId: service.id,
             quantity: dto.quantity,
-          },
-        },
-        tx
-      );
-
-      await tx.orderStatusLog.create({
-        data: {
-          orderId: order.id,
-          status: OrderStatus.pending,
-          message: "Order created and awaiting provider queue dispatch.",
-          metadata: {
-            providerServiceId: service.providerServiceId,
+            chargeAmount: chargeDecimal,
+            currency: wallet.currency,
             targetUrl: dto.targetUrl,
+            status: OrderStatus.pending,
+            providerServiceId: service.providerServiceId,
+            remains: dto.quantity,
+            notes: dto.notes,
           },
-        },
-      });
+        });
 
-      return order;
-    });
-
-    try {
-      await this.orderSubmitQueue.add(
-        ORDER_SUBMIT_JOB,
-        {
-          orderId: createdOrder.id,
-          userId,
-          serviceId: service.id,
-          providerServiceId: service.providerServiceId,
-        },
-        {
-          jobId: createdOrder.id,
-          attempts: 5,
-          backoff: {
-            type: "exponential",
-            delay: 5_000,
+        await this.walletService.deductWallet(
+          {
+            userId,
+            amount: chargeAmount,
+            currency: wallet.currency,
+            reference: order.id,
+            type: WalletTransactionType.charge,
+            description: `Wallet charged for order ${order.id}`,
+            metadata: {
+              orderId: order.id,
+              serviceId: service.id,
+              quantity: dto.quantity,
+            },
           },
-        }
-      );
-    } catch {
-      await this.rollbackUnqueuedOrder(createdOrder.id, userId, chargeAmount);
-      throw new BadGatewayException(
-        "Order could not be queued for processing. Your wallet balance was restored."
-      );
-    }
+          tx
+        );
+
+        await tx.orderStatusLog.create({
+          data: {
+            orderId: order.id,
+            status: OrderStatus.pending,
+            message: "Order created and awaiting provider queue dispatch.",
+            metadata: {
+              providerServiceId: service.providerServiceId,
+              targetUrl: dto.targetUrl,
+            },
+          },
+        });
+
+        await this.outbox.enqueue(
+          {
+            aggregateType: OUTBOX_AGGREGATE_ORDER,
+            aggregateId: order.id,
+            eventType: OUTBOX_EVENT_ORDER_SUBMIT,
+            payload: {
+              orderId: order.id,
+              userId,
+              serviceId: service.id,
+              providerServiceId: service.providerServiceId,
+            },
+          },
+          tx
+        );
+
+        return order;
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        timeout: 15_000,
+        maxWait: 5_000,
+      }
+    );
 
     return this.getOrderById(userId, createdOrder.id, "Order created successfully.");
   }
@@ -375,52 +377,6 @@ export class OrdersService {
             orderId: order.id,
             reason,
           },
-        },
-      });
-    });
-  }
-
-  private async rollbackUnqueuedOrder(orderId: string, userId: string, chargeAmount: number) {
-    const amount = new Prisma.Decimal(chargeAmount.toFixed(2));
-
-    await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { id: orderId },
-      });
-
-      if (!order || order.status !== OrderStatus.pending) {
-        return;
-      }
-
-      await tx.order.update({
-        where: { id: orderId },
-        data: {
-          status: OrderStatus.failed,
-          canceledAt: new Date(),
-          remains: 0,
-        },
-      });
-
-      await this.walletService.creditWallet(
-        {
-          userId,
-          amount: amount.toNumber(),
-          reference: orderId,
-          type: WalletTransactionType.refund,
-          description: `Wallet refunded because queueing failed for order ${orderId}`,
-          metadata: {
-            orderId,
-            reason: "queue_failure",
-          },
-        },
-        tx
-      );
-
-      await tx.orderStatusLog.create({
-        data: {
-          orderId,
-          status: OrderStatus.failed,
-          message: "Order queue dispatch failed. Wallet refunded automatically.",
         },
       });
     });

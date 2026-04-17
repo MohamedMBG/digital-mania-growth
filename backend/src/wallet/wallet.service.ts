@@ -118,14 +118,21 @@ export class WalletService {
     return this.withTransaction(tx, async (client) => {
       const wallet = await this.ensureWalletForUser(input.userId, client);
 
-      const updatedWallet = await client.wallet.update({
-        where: { id: wallet.id },
-        data: {
-          balance: {
-            increment: amount,
-          },
-        },
-      });
+      const rows = await client.$queryRaw<
+        Array<{ balance_before: Prisma.Decimal; balance_after: Prisma.Decimal }>
+      >`
+        UPDATE "Wallet"
+        SET "balance" = "balance" + ${amount}, "updatedAt" = NOW()
+        WHERE "id" = ${wallet.id}
+        RETURNING ("balance" - ${amount})::numeric AS balance_before,
+                  "balance"::numeric AS balance_after
+      `;
+
+      if (rows.length === 0) {
+        throw new NotFoundException("Wallet not found.");
+      }
+
+      const { balance_before: balanceBefore, balance_after: balanceAfter } = rows[0];
 
       const transaction = await client.walletTransaction.create({
         data: {
@@ -133,8 +140,8 @@ export class WalletService {
           providerRef: input.providerRef,
           reference: input.reference,
           amount,
-          balanceBefore: wallet.balance,
-          balanceAfter: updatedWallet.balance,
+          balanceBefore,
+          balanceAfter,
           currency: input.currency ?? wallet.currency,
           type: input.type,
           description: input.description,
@@ -142,7 +149,10 @@ export class WalletService {
         },
       });
 
-      return { wallet: updatedWallet, transaction };
+      return {
+        wallet: { ...wallet, balance: balanceAfter, updatedAt: new Date() },
+        transaction,
+      };
     });
   }
 
@@ -154,31 +164,21 @@ export class WalletService {
     return this.withTransaction(tx, async (client) => {
       const wallet = await this.ensureWalletForUser(input.userId, client);
 
-      const updatedRows = await client.wallet.updateMany({
-        where: {
-          id: wallet.id,
-          balance: {
-            gte: amount,
-          },
-        },
-        data: {
-          balance: {
-            decrement: amount,
-          },
-        },
-      });
+      const rows = await client.$queryRaw<
+        Array<{ balance_before: Prisma.Decimal; balance_after: Prisma.Decimal }>
+      >`
+        UPDATE "Wallet"
+        SET "balance" = "balance" - ${amount}, "updatedAt" = NOW()
+        WHERE "id" = ${wallet.id} AND "balance" >= ${amount}
+        RETURNING ("balance" + ${amount})::numeric AS balance_before,
+                  "balance"::numeric AS balance_after
+      `;
 
-      if (updatedRows.count === 0) {
+      if (rows.length === 0) {
         throw new BadRequestException("Insufficient wallet balance.");
       }
 
-      const updatedWallet = await client.wallet.findUnique({
-        where: { id: wallet.id },
-      });
-
-      if (!updatedWallet) {
-        throw new NotFoundException("Wallet not found.");
-      }
+      const { balance_before: balanceBefore, balance_after: balanceAfter } = rows[0];
 
       const transaction = await client.walletTransaction.create({
         data: {
@@ -186,8 +186,8 @@ export class WalletService {
           providerRef: input.providerRef,
           reference: input.reference,
           amount,
-          balanceBefore: wallet.balance,
-          balanceAfter: updatedWallet.balance,
+          balanceBefore,
+          balanceAfter,
           currency: input.currency ?? wallet.currency,
           type: input.type,
           description: input.description,
@@ -195,7 +195,10 @@ export class WalletService {
         },
       });
 
-      return { wallet: updatedWallet, transaction };
+      return {
+        wallet: { ...wallet, balance: balanceAfter, updatedAt: new Date() },
+        transaction,
+      };
     });
   }
 
@@ -225,6 +228,10 @@ export class WalletService {
       return operation(tx);
     }
 
-    return this.prisma.$transaction(operation);
+    return this.prisma.$transaction(operation, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      timeout: 15_000,
+      maxWait: 5_000,
+    });
   }
 }

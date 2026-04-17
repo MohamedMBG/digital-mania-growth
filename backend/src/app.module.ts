@@ -17,6 +17,7 @@ import { UsersModule } from "./users/users.module";
 import { WalletModule } from "./wallet/wallet.module";
 import { RedisModule } from "./infrastructure/redis/redis.module";
 import { QueueModule } from "./infrastructure/queue/queue.module";
+import { OutboxModule } from "./infrastructure/outbox/outbox.module";
 import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
 
 @Module({
@@ -26,6 +27,7 @@ import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
     PrismaModule,
     RedisModule,
     QueueModule,
+    OutboxModule,
     UsersModule,
     WalletModule,
     AuthModule,
