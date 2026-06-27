@@ -10,6 +10,7 @@ import {
   UserRole,
   WalletTransactionType,
 } from "@prisma/client";
+import { buildPaginationMeta } from "src/common/utils/pagination";
 import { PrismaService } from "src/prisma/prisma.service";
 import { ProviderService } from "src/provider/provider.service";
 import { WalletService } from "src/wallet/wallet.service";
@@ -77,11 +78,15 @@ export class AdminService {
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       })),
-      meta: this.buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
   async updateUser(actor: AuthenticatedUser, userId: string, dto: AdminUpdateUserDto) {
+    if (actor.id === userId) {
+      throw new BadRequestException("Admins cannot modify their own account through the admin panel.");
+    }
+
     const updatedUser = await this.usersService.updateAdminManagedUser(userId, {
       ...(dto.role !== undefined ? { role: dto.role } : {}),
       ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
@@ -136,7 +141,7 @@ export class AdminService {
       success: true,
       message: "Admin orders loaded successfully.",
       data: items.map((order) => this.serializeOrder(order)),
-      meta: this.buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -193,7 +198,7 @@ export class AdminService {
         createdAt: payment.createdAt,
         updatedAt: payment.updatedAt,
       })),
-      meta: this.buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -613,14 +618,4 @@ export class AdminService {
     };
   }
 
-  private buildPaginationMeta(page: number, limit: number, total: number) {
-    return {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-      hasNextPage: page * limit < total,
-      hasPreviousPage: page > 1,
-    };
-  }
 }

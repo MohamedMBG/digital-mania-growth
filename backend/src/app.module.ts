@@ -3,6 +3,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { AuthModule } from "./auth/auth.module";
 import { AdminModule } from "./admin/admin.module";
 import { RolesGuard } from "./auth/guards/roles.guard";
+import { CsrfGuard } from "./common/guards/csrf.guard";
 import { CategoriesModule } from "./categories/categories.module";
 import { CommonModule } from "./common/common.module";
 import { AppConfigModule } from "./config/config.module";
@@ -41,6 +42,10 @@ import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
     HealthModule,
   ],
   providers: [
+    {
+      provide: APP_GUARD,
+      useClass: CsrfGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: RolesGuard,

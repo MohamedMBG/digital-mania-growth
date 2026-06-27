@@ -1,6 +1,7 @@
 import { Global, Module } from "@nestjs/common";
 import { BullModule } from "@nestjs/bullmq";
 import { ConfigService } from "@nestjs/config";
+import { QueueCleanupService } from "./queue-cleanup.service";
 
 @Global()
 @Module({
@@ -28,5 +29,6 @@ import { ConfigService } from "@nestjs/config";
       }),
     }),
   ],
+  providers: [QueueCleanupService],
 })
 export class QueueModule {}

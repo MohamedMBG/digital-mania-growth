@@ -486,21 +486,30 @@ export class OrdersService {
         throw new BadRequestException("Order has already been canceled.");
       }
 
-      await this.walletService.creditWallet(
-        {
-          userId,
-          amount: order.chargeAmount.toNumber(),
-          currency: order.currency,
+      const existingRefund = await tx.walletTransaction.findFirst({
+        where: {
           reference: order.id,
           type: WalletTransactionType.refund,
-          description: `Wallet refunded for canceled order ${order.id}`,
-          metadata: {
-            orderId: order.id,
-            ...(metadata ?? {}),
-          },
         },
-        tx
-      );
+      });
+
+      if (!existingRefund) {
+        await this.walletService.creditWallet(
+          {
+            userId,
+            amount: order.chargeAmount.toNumber(),
+            currency: order.currency,
+            reference: order.id,
+            type: WalletTransactionType.refund,
+            description: `Wallet refunded for canceled order ${order.id}`,
+            metadata: {
+              orderId: order.id,
+              ...(metadata ?? {}),
+            },
+          },
+          tx
+        );
+      }
 
       const updatedOrder = await tx.order.findUnique({
         where: { id: order.id },

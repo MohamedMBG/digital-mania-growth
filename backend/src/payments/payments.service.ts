@@ -7,6 +7,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { PaymentStatus, Prisma, WalletTransactionType } from "@prisma/client";
 import Stripe from "stripe";
+import { buildPaginationMeta } from "src/common/utils/pagination";
 import { PrismaService } from "src/prisma/prisma.service";
 import { WalletService } from "src/wallet/wallet.service";
 import { CreateCheckoutSessionDto } from "./dto/create-checkout-session.dto";
@@ -133,7 +134,7 @@ export class PaymentsService {
         createdAt: payment.createdAt,
         updatedAt: payment.updatedAt,
       })),
-      meta: this.buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -298,14 +299,4 @@ export class PaymentsService {
     return value as Record<string, Prisma.JsonValue>;
   }
 
-  private buildPaginationMeta(page: number, limit: number, total: number) {
-    return {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-      hasNextPage: page * limit < total,
-      hasPreviousPage: page > 1,
-    };
-  }
 }

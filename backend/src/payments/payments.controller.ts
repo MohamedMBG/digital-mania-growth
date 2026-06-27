@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -12,6 +13,7 @@ import { Request } from "express";
 import { CurrentUser } from "src/auth/decorators/current-user.decorator";
 import { JwtAccessGuard } from "src/auth/guards/jwt-access.guard";
 import { AuthenticatedUser } from "src/auth/types/authenticated-user.type";
+import { SkipCsrf } from "src/common/decorators/skip-csrf.decorator";
 import { RateLimitGuard } from "src/common/guards/rate-limit.guard";
 import { RateLimit } from "src/common/rate-limit/rate-limit.decorator";
 import { CreateCheckoutSessionDto } from "./dto/create-checkout-session.dto";
@@ -35,6 +37,7 @@ export class PaymentsController {
     return this.paymentsService.createCheckoutSession(user.id, dto);
   }
 
+  @SkipCsrf()
   @UseGuards(RateLimitGuard)
   @RateLimit({ windowMs: 60 * 1000, maxRequests: 120, keyPrefix: "payments:webhook" })
   @Post("webhook")
@@ -42,6 +45,11 @@ export class PaymentsController {
     @Headers("stripe-signature") signature: string | undefined,
     @Req() request: StripeRequest
   ) {
+    if (!request.rawBody) {
+      throw new BadRequestException(
+        "Raw body unavailable. Ensure NestFactory is created with { rawBody: true }."
+      );
+    }
     return this.paymentsService.processWebhook(signature, request.rawBody);
   }
 

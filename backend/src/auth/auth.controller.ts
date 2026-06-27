@@ -58,7 +58,12 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response
   ) {
-    const refreshToken = dto.refreshToken ?? this.extractRefreshTokenFromCookie(request);
+    const cookieName =
+      this.configService.get<string>("jwt.refreshCookieName") ?? "nexora_refresh";
+    const refreshToken =
+      dto.refreshToken ??
+      (request.cookies as Record<string, string>)?.[cookieName] ??
+      "";
     const result = await this.authService.refresh(refreshToken);
     this.setRefreshCookie(response, result.refreshToken);
     return result.response;
@@ -91,7 +96,7 @@ export class AuthController {
     response.cookie(cookieName, refreshToken, {
       httpOnly: true,
       secure: nodeEnv === "production",
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
       ...(refreshTokenMaxAgeMs ? { maxAge: refreshTokenMaxAgeMs } : {}),
     });
@@ -105,28 +110,9 @@ export class AuthController {
     response.clearCookie(cookieName, {
       httpOnly: true,
       secure: nodeEnv === "production",
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
     });
-  }
-
-  private extractRefreshTokenFromCookie(request: Request) {
-    const cookieName =
-      this.configService.get<string>("jwt.refreshCookieName") ?? "nexora_refresh";
-    const cookieHeader = request.headers.cookie;
-
-    if (!cookieHeader) {
-      return "";
-    }
-
-    const cookies = cookieHeader.split(";").map((part) => part.trim());
-    const rawCookie = cookies.find((part) => part.startsWith(`${cookieName}=`));
-
-    if (!rawCookie) {
-      return "";
-    }
-
-    return decodeURIComponent(rawCookie.slice(cookieName.length + 1));
   }
 
   private getDurationMs(value: string) {

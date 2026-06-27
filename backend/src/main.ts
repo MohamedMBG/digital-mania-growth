@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
 import { NextFunction, Request, Response } from "express";
+import * as cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import { ConfigService } from "@nestjs/config";
 import { GlobalExceptionFilter } from "./common/filters/global-exception.filter";
@@ -26,6 +27,19 @@ async function bootstrap() {
 
   server.disable("x-powered-by");
   server.set("trust proxy", trustProxy);
+
+  app.use(cookieParser());
+
+  if (isProduction) {
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.headers["x-forwarded-proto"] === "http") {
+        const host = req.headers["host"] ?? "";
+        res.redirect(301, `https://${host}${req.url}`);
+        return;
+      }
+      next();
+    });
+  }
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
