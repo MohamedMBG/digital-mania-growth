@@ -16,7 +16,6 @@ import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { JwtAccessGuard } from "./guards/jwt-access.guard";
 import { AuthenticatedUser } from "./types/authenticated-user.type";
-import { RateLimitGuard } from "src/common/guards/rate-limit.guard";
 import { RateLimit } from "src/common/rate-limit/rate-limit.decorator";
 
 @Controller("auth")
@@ -26,7 +25,6 @@ export class AuthController {
     private readonly configService: ConfigService
   ) {}
 
-  @UseGuards(RateLimitGuard)
   @RateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 5, keyPrefix: "auth:register" })
   @Post("register")
   async register(
@@ -38,7 +36,6 @@ export class AuthController {
     return result.response;
   }
 
-  @UseGuards(RateLimitGuard)
   @RateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 10, keyPrefix: "auth:login" })
   @Post("login")
   async login(
@@ -50,7 +47,6 @@ export class AuthController {
     return result.response;
   }
 
-  @UseGuards(RateLimitGuard)
   @RateLimit({ windowMs: 5 * 60 * 1000, maxRequests: 20, keyPrefix: "auth:refresh" })
   @Post("refresh")
   async refresh(
