@@ -19,6 +19,7 @@ const Header = () => {
       ? [
           { to: "/dashboard", label: "Dashboard" },
           { to: "/add-funds", label: "Payments" },
+          { to: "/tickets", label: "Support" },
         ]
       : []),
   ];

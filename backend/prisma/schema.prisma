@@ -41,6 +41,13 @@ enum OrderStatus {
   failed
 }
 
+enum TicketStatus {
+  open
+  answered
+  resolved
+  closed
+}
+
 model User {
   id               String   @id @default(cuid())
   email            String   @unique
@@ -56,6 +63,8 @@ model User {
   wallet Wallet?
   orders Order[]
   adminActionLogs AdminActionLog[]
+  tickets Ticket[]
+  ticketMessages TicketMessage[]
 }
 
 model Wallet {
@@ -200,6 +209,7 @@ model Order {
   user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   service           Service          @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   statusLogs        OrderStatusLog[]
+  tickets           Ticket[]
 
   @@index([userId, createdAt])
   @@index([serviceId, createdAt])
@@ -259,5 +269,36 @@ model AdminActionLog {
 
   @@index([actorId, createdAt])
   @@index([entityType, createdAt])
+}
+
+model Ticket {
+  id        String       @id @default(cuid())
+  userId    String
+  orderId   String?
+  subject   String
+  status    TicketStatus @default(open)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order    Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  messages TicketMessage[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model TicketMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  authorId  String
+  isStaff   Boolean  @default(false)
+  body      String
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
 }
 

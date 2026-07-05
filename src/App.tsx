@@ -12,6 +12,8 @@ import ServiceDetails from "./pages/ServiceDetails";
 import Dashboard from "./pages/Dashboard";
 import Order from "./pages/Order";
 import AddFunds from "./pages/AddFunds";
+import Tickets from "./pages/Tickets";
+import TicketDetail from "./pages/TicketDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
@@ -69,6 +71,22 @@ const App = () => (
               element={
                 <RequireAuth>
                   <WalletCancel />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tickets"
+              element={
+                <RequireAuth>
+                  <Tickets />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/tickets/:id"
+              element={
+                <RequireAuth>
+                  <TicketDetail />
                 </RequireAuth>
               }
             />
