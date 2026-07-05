@@ -55,6 +55,7 @@ export default () => {
       frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:8080",
       logLevel: process.env.LOG_LEVEL ?? "debug",
       trustProxy: isProduction || process.env.TRUST_PROXY === "true",
+      trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 1),
     },
     database: {
       url: process.env.DATABASE_URL,
