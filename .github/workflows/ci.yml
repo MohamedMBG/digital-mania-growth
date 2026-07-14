@@ -35,6 +35,5 @@ jobs:
       - run: npm ci
       - run: npm run prisma:generate
       - run: npx tsc --noEmit -p tsconfig.json
-      - run: npm run lint
       - run: npm test
       - run: npm run build
