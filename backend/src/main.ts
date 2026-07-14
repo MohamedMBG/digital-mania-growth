@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
 import { NextFunction, Request, Response } from "express";
+import * as cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import { ConfigService } from "@nestjs/config";
 import { GlobalExceptionFilter } from "./common/filters/global-exception.filter";
@@ -23,9 +24,27 @@ async function bootstrap() {
   const frontendUrl = config.get<string>("app.frontendUrl", "http://localhost:8080");
   const isProduction = config.get<string>("app.nodeEnv") === "production";
   const trustProxy = config.get<boolean>("app.trustProxy", false);
+  const trustProxyHops = config.get<number>("app.trustProxyHops", 1);
 
   server.disable("x-powered-by");
-  server.set("trust proxy", trustProxy);
+  // Trust exactly one proxy hop (the reverse proxy / load balancer) so req.ip is the
+  // real client IP. Using boolean `true` trusts the entire X-Forwarded-For chain, which
+  // lets a client spoof req.ip and bypass IP-based rate limiting. Set TRUST_PROXY_HOPS
+  // if there is more than one proxy in front of the app.
+  server.set("trust proxy", trustProxy ? trustProxyHops : false);
+
+  app.use(cookieParser());
+
+  if (isProduction) {
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.headers["x-forwarded-proto"] === "http") {
+        const host = req.headers["host"] ?? "";
+        res.redirect(301, `https://${host}${req.url}`);
+        return;
+      }
+      next();
+    });
+  }
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -49,7 +68,7 @@ async function bootstrap() {
     origin: frontendUrl.split(",").map((value) => value.trim()),
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-request-id"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "x-request-id"],
   });
 
   app.useGlobalPipes(

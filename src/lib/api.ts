@@ -67,6 +67,7 @@ export async function apiRequest<TResponse>(
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest",
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
       ...(options.headers ?? {}),
     },

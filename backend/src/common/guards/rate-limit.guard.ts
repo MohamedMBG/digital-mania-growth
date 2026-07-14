@@ -25,15 +25,21 @@ export class RateLimitGuard implements CanActivate {
     private readonly rateLimitService: RateLimitService
   ) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const options = this.reflector.getAllAndOverride<RateLimitOptions>(
-      RATE_LIMIT_OPTIONS,
-      [context.getHandler(), context.getClass()]
-    );
+  // Applied globally as a per-IP DoS backstop. Routes without an explicit
+  // @RateLimit fall back to this generous default; auth/payments keep their
+  // stricter per-route limits (which override via metadata).
+  private static readonly DEFAULT_OPTIONS: RateLimitOptions = {
+    windowMs: 60 * 1000,
+    maxRequests: 600,
+    keyPrefix: "global",
+  };
 
-    if (!options) {
-      return true;
-    }
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const options =
+      this.reflector.getAllAndOverride<RateLimitOptions>(RATE_LIMIT_OPTIONS, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? RateLimitGuard.DEFAULT_OPTIONS;
 
     const http = context.switchToHttp();
     const request = http.getRequest<RateLimitedRequest>();

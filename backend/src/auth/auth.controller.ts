@@ -16,7 +16,6 @@ import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { JwtAccessGuard } from "./guards/jwt-access.guard";
 import { AuthenticatedUser } from "./types/authenticated-user.type";
-import { RateLimitGuard } from "src/common/guards/rate-limit.guard";
 import { RateLimit } from "src/common/rate-limit/rate-limit.decorator";
 
 @Controller("auth")
@@ -26,7 +25,6 @@ export class AuthController {
     private readonly configService: ConfigService
   ) {}
 
-  @UseGuards(RateLimitGuard)
   @RateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 5, keyPrefix: "auth:register" })
   @Post("register")
   async register(
@@ -38,7 +36,6 @@ export class AuthController {
     return result.response;
   }
 
-  @UseGuards(RateLimitGuard)
   @RateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 10, keyPrefix: "auth:login" })
   @Post("login")
   async login(
@@ -50,7 +47,6 @@ export class AuthController {
     return result.response;
   }
 
-  @UseGuards(RateLimitGuard)
   @RateLimit({ windowMs: 5 * 60 * 1000, maxRequests: 20, keyPrefix: "auth:refresh" })
   @Post("refresh")
   async refresh(
@@ -58,7 +54,12 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response
   ) {
-    const refreshToken = dto.refreshToken ?? this.extractRefreshTokenFromCookie(request);
+    const cookieName =
+      this.configService.get<string>("jwt.refreshCookieName") ?? "nexora_refresh";
+    const refreshToken =
+      dto.refreshToken ??
+      (request.cookies as Record<string, string>)?.[cookieName] ??
+      "";
     const result = await this.authService.refresh(refreshToken);
     this.setRefreshCookie(response, result.refreshToken);
     return result.response;
@@ -91,7 +92,7 @@ export class AuthController {
     response.cookie(cookieName, refreshToken, {
       httpOnly: true,
       secure: nodeEnv === "production",
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
       ...(refreshTokenMaxAgeMs ? { maxAge: refreshTokenMaxAgeMs } : {}),
     });
@@ -105,28 +106,9 @@ export class AuthController {
     response.clearCookie(cookieName, {
       httpOnly: true,
       secure: nodeEnv === "production",
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
     });
-  }
-
-  private extractRefreshTokenFromCookie(request: Request) {
-    const cookieName =
-      this.configService.get<string>("jwt.refreshCookieName") ?? "nexora_refresh";
-    const cookieHeader = request.headers.cookie;
-
-    if (!cookieHeader) {
-      return "";
-    }
-
-    const cookies = cookieHeader.split(";").map((part) => part.trim());
-    const rawCookie = cookies.find((part) => part.startsWith(`${cookieName}=`));
-
-    if (!rawCookie) {
-      return "";
-    }
-
-    return decodeURIComponent(rawCookie.slice(cookieName.length + 1));
   }
 
   private getDurationMs(value: string) {

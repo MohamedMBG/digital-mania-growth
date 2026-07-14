@@ -16,6 +16,7 @@ import appConfig from "./configuration";
         API_PREFIX: Joi.string().default("api"),
         FRONTEND_URL: Joi.string().required(),
         TRUST_PROXY: Joi.string().valid("true", "false").optional(),
+        TRUST_PROXY_HOPS: Joi.number().integer().min(1).max(10).default(1),
         DATABASE_URL: Joi.string().uri({ scheme: [/postgres(?:ql)?/] }).required(),
         REDIS_HOST: Joi.string().required(),
         REDIS_PORT: Joi.number().port().default(6379),

@@ -66,10 +66,15 @@ export class ProviderService {
   async cancelOrder(
     params: CancelProviderOrderParams
   ): Promise<ProviderCancelOrderResponse> {
-    return this.sendRequest<ProviderCancelOrderResponse>({
+    // smmfollows expects `orders` (comma-separated list), returns an array.
+    const result = await this.sendRequest<
+      ProviderCancelOrderResponse | ProviderCancelOrderResponse[]
+    >({
       action: "cancel",
-      order: params.order,
+      orders: String(params.order),
     });
+
+    return Array.isArray(result) ? result[0] : result;
   }
 
   async refillOrder(
