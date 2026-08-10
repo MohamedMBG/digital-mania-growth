@@ -19,17 +19,17 @@ const NotFound = () => {
           <p className="text-sm uppercase tracking-[0.22em] text-slate-400">404</p>
           <h1 className="mt-4 text-5xl font-semibold tracking-[-0.05em] md:text-6xl">Page not found</h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-8 text-slate-600">
-            The page you requested does not exist in this frontend workspace. Head back to the main flow and continue exploring the platform.
+            The page you requested does not exist. Head back to the main flow and set your growth goal.
           </p>
           <div className="mt-8 flex justify-center gap-3">
             <Link to="/">
               <Button className="rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8]">Go Home</Button>
             </Link>
-            <Link to="/services">
+            <a href="/#goal-builder">
               <Button variant="outline" className="rounded-xl border-slate-200 bg-white text-[#111827] hover:bg-slate-50">
-                Browse Services
+                Build My Growth Plan
               </Button>
-            </Link>
+            </a>
           </div>
         </div>
       </section>

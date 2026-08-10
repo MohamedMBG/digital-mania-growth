@@ -14,7 +14,7 @@ import { apiRequest, apiRequestWithRefresh, getApiErrorMessage } from "@/lib/api
 import { useAuth } from "@/context/AuthContext";
 
 const workflowSteps = ["Pick a service", "Paste your link", "Review wallet", "Confirm instantly"];
-const DRAFT_KEY = "nexora-order-draft";
+const DRAFT_KEY = "trendk-order-draft";
 
 type ServiceOption = {
   id: string;

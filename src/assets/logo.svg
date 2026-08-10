@@ -1,0 +1,10 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="trendk-gradient" x1="12" y1="52" x2="54" y2="10" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <path d="M11 48.5C20 45 27.5 39.5 34.5 31.5L40.5 24.5L45.5 29.5L53 11L34.5 18.5L39.5 23.5L33.5 30.5C27 37.8 20.4 42.5 11 45.5V48.5Z" fill="url(#trendk-gradient)"/>
+  <path d="M12 52C22.6 48.6 30.7 42.6 37.4 34.8" stroke="#0F172A" stroke-width="4" stroke-linecap="round"/>
+</svg>

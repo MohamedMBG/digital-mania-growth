@@ -7,6 +7,14 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContext";
 import RequireAuth from "@/components/RequireAuth";
 import Index from "./pages/Index";
+import HowItWorks from "./pages/HowItWorks";
+import Platforms from "./pages/Platforms";
+import ForBusiness from "./pages/ForBusiness";
+import ForCreators from "./pages/ForCreators";
+import About from "./pages/About";
+import GrowthGoals from "./pages/GrowthGoals";
+import GrowthGoalDetail from "./pages/GrowthGoalDetail";
+import AdminGrowth from "./pages/AdminGrowth";
 import Services from "./pages/Services";
 import ServiceDetails from "./pages/ServiceDetails";
 import Dashboard from "./pages/Dashboard";
@@ -32,8 +40,55 @@ const App = () => (
           <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/services" element={<Services />} />
-            <Route path="/services/:id" element={<ServiceDetails />} />
+            <Route path="/how-it-works" element={<HowItWorks />} />
+            <Route path="/platforms" element={<Platforms />} />
+            <Route path="/for-business" element={<ForBusiness />} />
+            <Route path="/for-creators" element={<ForCreators />} />
+            <Route path="/about" element={<About />} />
+            <Route
+              path="/goals"
+              element={
+                <RequireAuth>
+                  <GrowthGoals />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/goals/:id"
+              element={
+                <RequireAuth>
+                  <GrowthGoalDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin/growth"
+              element={
+                <RequireAuth roles={["admin"]}>
+                  <AdminGrowth />
+                </RequireAuth>
+              }
+            />
+            {/*
+              The delivery catalogue is an internal tool, not a storefront:
+              nothing public links to it and visitors never see a price list.
+            */}
+            <Route
+              path="/services"
+              element={
+                <RequireAuth>
+                  <Services />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/services/:id"
+              element={
+                <RequireAuth>
+                  <ServiceDetails />
+                </RequireAuth>
+              }
+            />
             <Route
               path="/dashboard"
               element={

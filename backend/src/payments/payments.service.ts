@@ -8,6 +8,7 @@ import { ConfigService } from "@nestjs/config";
 import { PaymentStatus, Prisma, WalletTransactionType } from "@prisma/client";
 import Stripe from "stripe";
 import { buildPaginationMeta } from "src/common/utils/pagination";
+import { GrowthBotService } from "src/growth-bot/growth-bot.service";
 import { PrismaService } from "src/prisma/prisma.service";
 import { WalletService } from "src/wallet/wallet.service";
 import { CreateCheckoutSessionDto } from "./dto/create-checkout-session.dto";
@@ -20,6 +21,7 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
+    private readonly growthBot: GrowthBotService,
     private readonly configService: ConfigService
   ) {
     this.stripe = new Stripe(configService.getOrThrow<string>("stripe.secretKey"));
@@ -196,6 +198,8 @@ export class PaymentsService {
       return;
     }
 
+    let creditedUserId: string | null = null;
+
     await this.prisma.$transaction(async (tx) => {
       const updatedCount = await tx.payment.updateMany({
         where: {
@@ -243,7 +247,15 @@ export class PaymentsService {
         },
         tx
       );
+
+      creditedUserId = wallet.userId;
     });
+
+    // Money has landed, so any quote the customer already confirmed can start.
+    // Run outside the transaction: ordering must not hold the credit open.
+    if (creditedUserId) {
+      await this.growthBot.onWalletFunded(creditedUserId);
+    }
   }
 
   private async updatePaymentStatus(

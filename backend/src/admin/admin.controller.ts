@@ -1,10 +1,25 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { UserRole } from "@prisma/client";
 import { CurrentUser } from "src/auth/decorators/current-user.decorator";
 import { Roles } from "src/auth/decorators/roles.decorator";
 import { JwtAccessGuard } from "src/auth/guards/jwt-access.guard";
 import { RolesGuard } from "src/auth/guards/roles.guard";
 import { AuthenticatedUser } from "src/auth/types/authenticated-user.type";
+import { AdminCreateProgressSnapshotDto } from "src/growth/dto/admin-create-progress-snapshot.dto";
+import { AdminListGrowthRequestsQueryDto } from "src/growth/dto/admin-list-growth-requests-query.dto";
+import { AdminUpdateGrowthRequestDto } from "src/growth/dto/admin-update-growth-request.dto";
+import { AdminUpsertGrowthPlanDto } from "src/growth/dto/admin-upsert-growth-plan.dto";
+import { GrowthService } from "src/growth/growth.service";
 import { AdminService } from "./admin.service";
 import { AdminCreateServiceDto } from "./dto/admin-create-service.dto";
 import { AdminListQueryDto } from "./dto/admin-list-query.dto";
@@ -17,7 +32,50 @@ import { AdminWalletAdjustmentDto } from "./dto/admin-wallet-adjustment.dto";
 @UseGuards(JwtAccessGuard, RolesGuard)
 @Roles(UserRole.admin)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly growthService: GrowthService
+  ) {}
+
+  @Get("growth-requests")
+  getGrowthRequests(@Query() query: AdminListGrowthRequestsQueryDto) {
+    return this.growthService.adminListRequests(query);
+  }
+
+  @Get("growth-requests/:id")
+  getGrowthRequest(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param("id") id: string
+  ) {
+    return this.growthService.getRequestById(actor, id);
+  }
+
+  @Patch("growth-requests/:id")
+  updateGrowthRequest(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: AdminUpdateGrowthRequestDto
+  ) {
+    return this.growthService.adminUpdateRequest(actor, id, dto);
+  }
+
+  @Put("growth-requests/:id/plan")
+  upsertGrowthPlan(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: AdminUpsertGrowthPlanDto
+  ) {
+    return this.growthService.adminUpsertPlan(actor, id, dto);
+  }
+
+  @Post("growth-requests/:id/progress")
+  addGrowthProgress(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: AdminCreateProgressSnapshotDto
+  ) {
+    return this.growthService.adminAddProgressSnapshot(actor, id, dto);
+  }
 
   @Get("users")
   getUsers(@Query() query: AdminListQueryDto) {

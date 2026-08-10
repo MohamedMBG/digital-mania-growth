@@ -28,7 +28,7 @@ type ServiceDetailsData = {
   platform: { name: string; slug?: string };
 };
 
-const DRAFT_KEY = "nexora-order-draft";
+const DRAFT_KEY = "trendk-order-draft";
 
 const ServiceDetails = () => {
   const { id = "" } = useParams();

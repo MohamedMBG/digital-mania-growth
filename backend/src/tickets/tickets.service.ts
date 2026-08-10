@@ -6,6 +6,7 @@ import {
 import { Prisma, TicketStatus, UserRole } from "@prisma/client";
 import { buildPaginationMeta } from "src/common/utils/pagination";
 import { AuthenticatedUser } from "src/auth/types/authenticated-user.type";
+import { GrowthBotService } from "src/growth-bot/growth-bot.service";
 import { PrismaService } from "src/prisma/prisma.service";
 import { CreateTicketDto } from "./dto/create-ticket.dto";
 import { CreateTicketMessageDto } from "./dto/create-ticket-message.dto";
@@ -20,6 +21,7 @@ const ticketInclude = {
       id: true,
       body: true,
       isStaff: true,
+      isBot: true,
       authorId: true,
       createdAt: true,
     },
@@ -28,7 +30,10 @@ const ticketInclude = {
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly growthBot: GrowthBotService
+  ) {}
 
   private isStaff(user: AuthenticatedUser): boolean {
     return user.role === UserRole.admin || user.role === UserRole.support;
@@ -126,7 +131,12 @@ export class TicketsService {
   ) {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id: ticketId },
-      select: { id: true, userId: true, status: true },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        growthRequestId: true,
+      },
     });
 
     if (!ticket || (!this.isStaff(user) && ticket.userId !== user.id)) {
@@ -154,6 +164,12 @@ export class TicketsService {
         data: { status: staff ? TicketStatus.answered : TicketStatus.open },
       }),
     ]);
+
+    // A customer writing in a goal thread is talking to the assistant, which
+    // answers inline so the reply is already there when the thread reloads.
+    if (!staff && ticket.growthRequestId) {
+      await this.growthBot.onCustomerMessage(ticket.id, dto.body);
+    }
 
     return this.getTicketById(user, ticket.id, "Message added successfully.");
   }
