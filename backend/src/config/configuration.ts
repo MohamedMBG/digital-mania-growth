@@ -93,6 +93,15 @@ export default () => {
     cache: {
       ttlSeconds: Number(process.env.CACHE_TTL_SECONDS ?? 120),
     },
+    growthBot: {
+      email:
+        process.env.GROWTH_BOT_EMAIL?.trim().toLowerCase() ||
+        "assistant@trendk.com",
+      name: process.env.GROWTH_BOT_NAME?.trim() || "TrendK Assistant",
+      /// Percentage added on top of the catalogue price when the assistant
+      /// quotes a managed goal. 0 keeps the catalogue price as-is.
+      markupPercent: Number(process.env.GROWTH_BOT_MARKUP_PERCENT ?? 0),
+    },
     adminBootstrap: {
       email: process.env.ADMIN_BOOTSTRAP_EMAIL?.trim().toLowerCase() || undefined,
       password: process.env.ADMIN_BOOTSTRAP_PASSWORD,

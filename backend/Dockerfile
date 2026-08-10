@@ -15,6 +15,9 @@ RUN npm run build
 FROM node:22-alpine AS production
 
 WORKDIR /app
+ENV NODE_ENV=production
+
+RUN apk add --no-cache dumb-init
 
 COPY --from=build /app/package.json /app/package-lock.json* ./
 RUN npm ci --omit=dev
@@ -26,4 +29,5 @@ COPY --from=build /app/dist ./dist
 
 EXPOSE 4000
 
+ENTRYPOINT ["dumb-init", "--"]
 CMD ["npm", "run", "start:prod"]

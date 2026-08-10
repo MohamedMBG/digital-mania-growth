@@ -28,7 +28,7 @@ const Login = () => {
     try {
       setSubmitting(true);
       await login(email, password);
-      toast({ title: "Signed in", description: "Welcome back to NEXORA." });
+      toast({ title: "Signed in", description: "Welcome back to TrendK." });
       navigate(redirect);
     } catch (error) {
       toast({

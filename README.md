@@ -1,6 +1,6 @@
-# Nexora
+# TrendK
 
-Nexora is a React and NestJS platform for service discovery, wallet funding, campaign ordering, and provider-backed order processing.
+TrendK is a React and NestJS platform for service discovery, wallet funding, campaign ordering, and provider-backed order processing.
 
 ## Stack
 

@@ -11,18 +11,22 @@ const Header = () => {
   const location = useLocation();
   const { isAuthenticated, logout, user } = useAuth();
 
-  const links = [
-    { to: "/", label: "Home" },
-    { to: "/services", label: "Services" },
-    { to: "/order", label: "Order" },
-    ...(isAuthenticated
-      ? [
-          { to: "/dashboard", label: "Dashboard" },
-          { to: "/add-funds", label: "Payments" },
-          { to: "/tickets", label: "Support" },
-        ]
-      : []),
-  ];
+  const links = isAuthenticated
+    ? [
+        { to: "/dashboard", label: "Dashboard" },
+        { to: "/goals", label: "My Goals" },
+        { to: "/platforms", label: "Platforms" },
+        { to: "/add-funds", label: "Billing" },
+        { to: "/tickets", label: "Messages" },
+        ...(user?.role === "admin" ? [{ to: "/admin/growth", label: "Admin" }] : []),
+      ]
+    : [
+        { to: "/how-it-works", label: "How It Works" },
+        { to: "/platforms", label: "Platforms" },
+        { to: "/for-business", label: "For Business" },
+        { to: "/for-creators", label: "For Creators" },
+        { to: "/about", label: "About" },
+      ];
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/88 backdrop-blur-xl">
@@ -36,7 +40,7 @@ const Header = () => {
             variant="outline"
             className="hidden rounded-full border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 xl:inline-flex"
           >
-            {isAuthenticated ? "Account active" : "Create an account to order"}
+            {isAuthenticated ? "Account active" : "You set the goal. We build the plan."}
           </Badge>
         </div>
 
@@ -89,14 +93,14 @@ const Header = () => {
             <>
               <Link to="/login">
                 <Button variant="ghost" className="rounded-full text-slate-600 hover:text-[#111827]">
-                  Sign In
+                  Login
                 </Button>
               </Link>
-              <Link to="/register">
+              <a href="/#goal-builder">
                 <Button className="rounded-full border-0 bg-[#2563EB] text-white shadow-[0_16px_40px_rgba(37,99,235,0.24)] hover:bg-[#1d4ed8]">
-                  Create Account
+                  Build My Plan
                 </Button>
-              </Link>
+              </a>
             </>
           )}
         </div>
@@ -153,14 +157,14 @@ const Header = () => {
                   <>
                     <Link to="/login" onClick={() => setMobileOpen(false)}>
                       <Button variant="outline" className="w-full rounded-xl border-slate-200 bg-white text-[#111827]">
-                        Sign In
+                        Login
                       </Button>
                     </Link>
-                    <Link to="/register" onClick={() => setMobileOpen(false)}>
+                    <a href="/#goal-builder" onClick={() => setMobileOpen(false)}>
                       <Button className="w-full rounded-xl border-0 bg-[#2563EB] text-white">
-                        Create Account
+                        Build My Plan
                       </Button>
-                    </Link>
+                    </a>
                   </>
                 )}
               </div>

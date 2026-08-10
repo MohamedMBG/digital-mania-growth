@@ -7,6 +7,8 @@ import { RateLimitGuard } from "./common/guards/rate-limit.guard";
 import { CategoriesModule } from "./categories/categories.module";
 import { CommonModule } from "./common/common.module";
 import { AppConfigModule } from "./config/config.module";
+import { GrowthModule } from "./growth/growth.module";
+import { GrowthBotModule } from "./growth-bot/growth-bot.module";
 import { HealthModule } from "./health/health.module";
 import { OrdersModule } from "./orders/orders.module";
 import { PrismaModule } from "./prisma/prisma.module";
@@ -41,6 +43,8 @@ import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
     CategoriesModule,
     ServicesModule,
     TicketsModule,
+    GrowthModule,
+    GrowthBotModule,
     HealthModule,
   ],
   providers: [

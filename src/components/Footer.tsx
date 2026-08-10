@@ -4,30 +4,30 @@ import BrandLogo from "@/components/BrandLogo";
 
 const footerLinks = [
   {
-    title: "Services",
+    title: "Growth",
     links: [
-      { label: "Growth Solutions", to: "/services" },
-      { label: "Campaign Orders", to: "/order" },
-      { label: "Client Dashboard", to: "/dashboard" },
-      { label: "Billing & Wallet", to: "/add-funds" },
+      { label: "How It Works", to: "/how-it-works" },
+      { label: "Supported Platforms", to: "/platforms" },
+      { label: "For Business", to: "/for-business" },
+      { label: "For Creators", to: "/for-creators" },
     ],
   },
   {
-    title: "Channels",
+    title: "Platforms",
     links: [
-      { label: "Instagram", to: "/services" },
-      { label: "TikTok", to: "/services" },
-      { label: "YouTube", to: "/services" },
-      { label: "Spotify", to: "/services" },
+      { label: "Instagram Growth", to: "/platforms" },
+      { label: "TikTok Growth", to: "/platforms" },
+      { label: "YouTube Growth", to: "/platforms" },
+      { label: "LinkedIn Growth", to: "/platforms" },
     ],
   },
   {
-    title: "Agency",
+    title: "Account",
     links: [
-      { label: "About Nexora", to: "/" },
-      { label: "Trust & Security", to: "/add-funds" },
-      { label: "Client Support", to: "/dashboard" },
-      { label: "Platform Status", to: "/dashboard" },
+      { label: "About TrendK", to: "/about" },
+      { label: "My Goals", to: "/goals" },
+      { label: "Dashboard", to: "/dashboard" },
+      { label: "Messages", to: "/tickets" },
     ],
   },
 ];
@@ -43,13 +43,13 @@ const Footer = () => {
             </Link>
 
             <p className="mt-5 text-sm leading-7 text-slate-600">
-              Nexora is a digital growth agency focused on premium social media
-              campaigns, streamlined client delivery, and dependable account support
-              for brands, creators, and modern businesses.
+              TrendK is a personalized social media growth service. You tell us
+              where your account is today and where you want it to go, and our team
+              builds the strategy around it.
             </p>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              {["Agency-grade support", "Secure billing", "Reliable delivery"].map(
+              {["Personalized strategy", "Reviewed by our team", "Managed execution"].map(
                 (item) => (
                   <Badge
                     key={item}
@@ -84,11 +84,9 @@ const Footer = () => {
         </div>
 
         <div className="mt-12 flex flex-col gap-4 border-t border-slate-200 pt-6 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
-          <p>&copy; 2026 NEXORA. Strategic growth services for modern brands.</p>
+          <p>&copy; 2026 TrendK. Your goal. Our strategy.</p>
           <div className="flex flex-wrap items-center gap-5">
-            <span>Campaign strategy</span>
-            <span>Trusted execution</span>
-            <span>Professional support</span>
+            <span>Growth targets are objectives, not guarantees</span>
           </div>
         </div>
       </div>

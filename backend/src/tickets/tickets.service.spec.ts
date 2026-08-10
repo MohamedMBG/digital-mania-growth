@@ -1,6 +1,7 @@
 import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import { TicketStatus, UserRole } from "@prisma/client";
+import { GrowthBotService } from "src/growth-bot/growth-bot.service";
 import { PrismaService } from "src/prisma/prisma.service";
 import { TicketsService } from "./tickets.service";
 import { AuthenticatedUser } from "src/auth/types/authenticated-user.type";
@@ -53,11 +54,17 @@ function createMockPrisma() {
 describe("TicketsService", () => {
   let service: TicketsService;
   let prisma: ReturnType<typeof createMockPrisma>;
+  let growthBot: { onCustomerMessage: jest.Mock };
 
   beforeEach(async () => {
     prisma = createMockPrisma();
+    growthBot = { onCustomerMessage: jest.fn().mockResolvedValue(undefined) };
     const module: TestingModule = await Test.createTestingModule({
-      providers: [TicketsService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        TicketsService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: GrowthBotService, useValue: growthBot },
+      ],
     }).compile();
     service = module.get(TicketsService);
   });
@@ -133,6 +140,39 @@ describe("TicketsService", () => {
       expect(prisma.ticket.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { status: TicketStatus.answered } })
       );
+    });
+
+    it("lets the assistant answer a customer message in a goal thread", async () => {
+      prisma.ticket.findUnique
+        .mockResolvedValueOnce({ ...ownedTicket, growthRequestId: "req-1" })
+        .mockResolvedValueOnce({ ...ownedTicket, growthRequestId: "req-1" });
+
+      await service.addMessage(customer, "ticket-1", { body: "CONFIRM" });
+
+      expect(growthBot.onCustomerMessage).toHaveBeenCalledWith(
+        "ticket-1",
+        "CONFIRM"
+      );
+    });
+
+    it("keeps the assistant out of staff replies", async () => {
+      prisma.ticket.findUnique
+        .mockResolvedValueOnce({ ...ownedTicket, growthRequestId: "req-1" })
+        .mockResolvedValueOnce({ ...ownedTicket, growthRequestId: "req-1" });
+
+      await service.addMessage(staff, "ticket-1", { body: "taking over" });
+
+      expect(growthBot.onCustomerMessage).not.toHaveBeenCalled();
+    });
+
+    it("keeps the assistant out of ordinary support tickets", async () => {
+      prisma.ticket.findUnique
+        .mockResolvedValueOnce({ ...ownedTicket, growthRequestId: null })
+        .mockResolvedValueOnce({ ...ownedTicket, growthRequestId: null });
+
+      await service.addMessage(customer, "ticket-1", { body: "CONFIRM" });
+
+      expect(growthBot.onCustomerMessage).not.toHaveBeenCalled();
     });
 
     it("rejects messages on a closed ticket", async () => {

@@ -14,6 +14,7 @@ type TicketMessage = {
   id: string;
   body: string;
   isStaff: boolean;
+  isBot: boolean;
   authorId: string;
   createdAt: string;
 };
@@ -179,7 +180,11 @@ const TicketDetail = () => {
                     <CardContent className="p-5">
                       <div className="mb-2 flex items-center justify-between">
                         <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                          {msg.isStaff ? "Support" : "You"}
+                          {msg.isBot
+                            ? "Growth assistant"
+                            : msg.isStaff
+                              ? "Support"
+                              : "You"}
                         </span>
                         <span className="text-xs text-slate-400">
                           {new Date(msg.createdAt).toLocaleString()}

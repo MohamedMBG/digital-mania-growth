@@ -6,6 +6,7 @@ import {
 import { Test, TestingModule } from "@nestjs/testing";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { ConfigService } from "@nestjs/config";
+import { GrowthBotService } from "src/growth-bot/growth-bot.service";
 import { PrismaService } from "src/prisma/prisma.service";
 import { WalletService } from "src/wallet/wallet.service";
 import { PaymentsService } from "./payments.service";
@@ -67,17 +68,20 @@ describe("PaymentsService.processWebhook", () => {
   let service: PaymentsService;
   let prisma: ReturnType<typeof createMockPrisma>;
   let wallet: ReturnType<typeof createMockWallet>;
+  let growthBot: { onWalletFunded: jest.Mock };
 
   beforeEach(async () => {
     mockConstructEvent.mockReset();
     prisma = createMockPrisma();
     wallet = createMockWallet();
+    growthBot = { onWalletFunded: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PaymentsService,
         { provide: PrismaService, useValue: prisma },
         { provide: WalletService, useValue: wallet },
+        { provide: GrowthBotService, useValue: growthBot },
         {
           provide: ConfigService,
           useValue: { getOrThrow: (k: string) => config[k] },
@@ -120,6 +124,29 @@ describe("PaymentsService.processWebhook", () => {
     expect(prisma._txClient.payment.updateMany).toHaveBeenCalledTimes(1);
     expect(wallet.creditWallet).toHaveBeenCalledTimes(1);
     expect(wallet.creditWallet.mock.calls[0][0].amount).toBe(50);
+  });
+
+  it("releases confirmed quotes for the funded customer", async () => {
+    mockConstructEvent.mockReturnValue({
+      type: "checkout.session.completed",
+      data: { object: session },
+    });
+
+    await service.processWebhook("sig", Buffer.from("payload"));
+
+    expect(growthBot.onWalletFunded).toHaveBeenCalledWith("user-1");
+  });
+
+  it("does not release quotes when nothing was credited", async () => {
+    prisma._txClient.payment.updateMany.mockResolvedValue({ count: 0 });
+    mockConstructEvent.mockReturnValue({
+      type: "checkout.session.completed",
+      data: { object: session },
+    });
+
+    await service.processWebhook("sig", Buffer.from("payload"));
+
+    expect(growthBot.onWalletFunded).not.toHaveBeenCalled();
   });
 
   it("does not double-credit an already-credited payment", async () => {

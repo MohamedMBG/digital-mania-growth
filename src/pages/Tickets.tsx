@@ -80,7 +80,10 @@ const Tickets = () => {
       setSubject("");
       setMessage("");
       setOrderId("");
-      toast({ title: "Ticket created", description: "Our team will reply shortly." });
+      toast({
+        title: "Thread opened",
+        description: "A team member will reply here shortly.",
+      });
       await loadTickets();
     } catch (error) {
       toast({
@@ -100,13 +103,16 @@ const Tickets = () => {
       <section className="border-b border-slate-200 bg-white py-16">
         <div className="container">
           <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-4 py-1.5 text-[11px] uppercase tracking-[0.22em] text-slate-500">
-            Support
+            Private messages
           </Badge>
           <h1 className="mt-6 text-4xl font-semibold tracking-[-0.04em] text-[#111827] md:text-5xl">
-            Help &amp; support tickets
+            Your private threads
           </h1>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-            Open a ticket for order issues or account questions and follow the conversation here.
+            Each goal you set gets its own private thread. Your growth assistant
+            answers there instantly, prices the work and starts it as soon as
+            payment clears — ask for a human any time and someone from the team
+            takes over.
           </p>
         </div>
       </section>
@@ -117,14 +123,20 @@ const Tickets = () => {
             <CardContent className="space-y-5 p-7">
               <div className="flex items-center gap-2">
                 <Plus className="h-4 w-4 text-[#2563EB]" />
-                <h2 className="text-xl font-semibold text-[#111827]">Open a new ticket</h2>
+                <h2 className="text-xl font-semibold text-[#111827]">
+                  Start a private thread
+                </h2>
               </div>
+              <p className="text-sm leading-6 text-slate-500">
+                Setting a goal opens a thread automatically. Use this form for
+                anything else you want to raise privately.
+              </p>
               <div>
                 <Label className="mb-2 block text-sm font-medium text-slate-600">Subject</Label>
                 <Input
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Order not delivered"
+                  placeholder="Question about my Instagram goal"
                   className="h-12 rounded-xl border-slate-200 bg-[#F8FAFC]"
                 />
               </div>
@@ -162,12 +174,12 @@ const Tickets = () => {
             <CardContent className="p-7">
               <div className="flex items-center gap-2">
                 <LifeBuoy className="h-4 w-4 text-[#2563EB]" />
-                <h2 className="text-xl font-semibold text-[#111827]">Your tickets</h2>
+                <h2 className="text-xl font-semibold text-[#111827]">Your threads</h2>
               </div>
               <div className="mt-5 space-y-3">
                 {tickets.length === 0 && (
                   <div className="rounded-[1.25rem] border border-slate-200 bg-[#F8FAFC] p-6 text-sm text-slate-500">
-                    No tickets yet.
+                    No threads yet. Set a growth goal and one opens for you.
                   </div>
                 )}
                 {tickets.map((ticket) => (
